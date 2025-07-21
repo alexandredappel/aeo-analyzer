@@ -78,7 +78,7 @@ export const UrlForm = forwardRef<UrlFormRef, UrlFormProps>(
           disabled={isSubmitting}
           className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed text-white font-semibold py-4 px-6 rounded-lg text-lg transition-colors duration-200"
         >
-          {isSubmitting ? "Analyzing..." : "Analyze AEO Score"}
+          {isSubmitting ? "Starting Analysis..." : "Analyze Website"}
         </button>
       </form>
     );

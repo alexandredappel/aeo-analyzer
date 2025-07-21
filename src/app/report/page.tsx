@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams, useRouter } from "next/navigation";
-import { Suspense } from "react";
+import { Suspense, useEffect, useRef } from "react";
 import { ReportLayout } from "@/components/layouts/ReportLayout";
 import { ErrorMessage, BackButton, AnalysisLogs, CollectionResults, LoadingSpinner } from "@/components/ui";
 import { useAnalysis } from "@/hooks/useAnalysis";
@@ -21,6 +21,7 @@ function ReportContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const urlParam = searchParams.get('url');
+  const hasAutoStarted = useRef(false);
   
   const {
     analysisState,
@@ -39,6 +40,21 @@ function ReportContent() {
   const handleBackToHome = () => {
     router.push('/');
   };
+
+  // Auto-start analysis when arriving with a valid URL
+  useEffect(() => {
+    if (urlParam && !hasAutoStarted.current && analysisState === 'idle') {
+      try {
+        const decodedUrl = decodeURIComponent(urlParam);
+        if (isValidUrl(decodedUrl)) {
+          hasAutoStarted.current = true;
+          startAnalysis(decodedUrl);
+        }
+      } catch {
+        // Invalid URL encoding - will be handled by validation below
+      }
+    }
+  }, [urlParam, analysisState, startAnalysis]);
 
   // Handle missing URL parameter
   if (!urlParam) {
@@ -82,13 +98,14 @@ function ReportContent() {
     );
   }
 
-  // Handle analysis start
+  // Handle analysis start (manual trigger)
   const handleStartAnalysis = () => {
     startAnalysis(decodedUrl);
   };
 
   // Handle retry
   const handleRetry = () => {
+    hasAutoStarted.current = false; // Reset auto-start flag for retry
     resetAnalysis();
   };
 
@@ -150,7 +167,10 @@ function ReportContent() {
         <div className="mt-3 flex items-center gap-2">
           <span className="text-gray-400">Status:</span>
           {analysisState === 'idle' && (
-            <span className="text-gray-300">Ready to start analysis</span>
+            <span className="text-yellow-400 flex items-center gap-2">
+              <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></div>
+              Starting analysis...
+            </span>
           )}
           {analysisState === 'running' && (
             <span className="text-blue-400 flex items-center gap-2">
@@ -194,16 +214,16 @@ function ReportContent() {
 
       {/* Analysis progress or placeholder */}
       {analysisState === 'idle' && (
-        <div className="bg-blue-900/20 border border-blue-700 rounded-lg p-8 text-center">
+        <div className="bg-yellow-900/20 border border-yellow-700 rounded-lg p-8 text-center">
           <div className="space-y-4">
-            <div className="w-16 h-16 mx-auto bg-blue-500/20 rounded-full flex items-center justify-center">
-              <span className="text-2xl">🚀</span>
+            <div className="w-16 h-16 mx-auto bg-yellow-500/20 rounded-full flex items-center justify-center">
+              <LoadingSpinner size="md" />
             </div>
-            <h3 className="text-xl font-semibold text-blue-400">
-              Ready to analyze your website
+            <h3 className="text-xl font-semibold text-yellow-400">
+              Preparing analysis...
             </h3>
             <p className="text-gray-300 max-w-md mx-auto">
-              Click &quot;Start Analysis&quot; to begin collecting data about your website&apos;s 
+              Analysis will start automatically. We&apos;re preparing to collect data about your website&apos;s 
               AEO optimization including HTML content, robots.txt, and sitemap.xml.
             </p>
           </div>
