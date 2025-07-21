@@ -1,4 +1,5 @@
 import puppeteer, { Browser, Page } from 'puppeteer';
+import chromium from '@sparticuz/chromium';
 import * as cheerio from 'cheerio';
 import logger from '@/utils/logger';
 
@@ -284,7 +285,26 @@ export class AccessibilityAnalyzer {
 
   async initializeBrowser(): Promise<void> {
     if (!this.browser) {
-      this.browser = await puppeteer.launch(this.puppeteerConfig);
+      try {
+        // Use serverless-compatible Chrome configuration
+        this.browser = await puppeteer.launch({
+          args: [
+            ...chromium.args,
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-gpu'
+          ],
+          defaultViewport: { width: 1200, height: 800 },
+          executablePath: await chromium.executablePath(),
+          headless: true,
+        });
+        logger.info('Browser initialized successfully with serverless Chrome');
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        logger.error(`Failed to initialize browser: ${errorMessage}`);
+        throw new Error(`Browser initialization failed: ${errorMessage}`);
+      }
     }
   }
 
