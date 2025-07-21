@@ -22,10 +22,9 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // Determine if we should load analytics
-  const shouldLoadAnalytics = process.env.NODE_ENV === 'production' && 
-    (process.env.VERCEL_URL?.includes('ai-generative-engine-optimization.com') || 
-     process.env.NEXT_PUBLIC_DOMAIN === 'ai-generative-engine-optimization.com');
+  // Load analytics script in production (all domains)
+  // Domain filtering is handled in analytics utility
+  const shouldLoadAnalytics = process.env.NODE_ENV === 'production';
 
   return (
     <html lang="en">
