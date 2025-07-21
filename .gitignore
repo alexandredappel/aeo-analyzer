@@ -39,3 +39,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Notes de développement
+STEP*.md
+COMPONENTS.md
+DESIGN.md
+LLM-FORMATTING-FIX.md
+PROJECT-STATUS.md
+architecture.md
