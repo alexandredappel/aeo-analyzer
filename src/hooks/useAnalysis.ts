@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { trackAnalysisComplete, trackAnalysisError } from '@/utils/analytics';
 
 type AnalysisState = 'idle' | 'running' | 'completed' | 'error';
 
@@ -154,6 +155,11 @@ export function useAnalysis() {
         setSummary(result.summary);
         setAnalysisResults(result.analysis || null);
         setAnalysisState('completed');
+        
+        // Track successful analysis completion
+        // Note: aeoScore might be in result directly, not in result.analysis
+        const aeoScore = (result as any).aeoScore?.totalScore || undefined;
+        trackAnalysisComplete(url, aeoScore);
       } else {
         throw new Error(result.logs?.join('\n') || 'Analysis failed');
       }
@@ -166,6 +172,9 @@ export function useAnalysis() {
       
       setError(errorMessage);
       setAnalysisState('error');
+      
+      // Track analysis error
+      trackAnalysisError(url, errorMessage);
     }
   }, []);
 

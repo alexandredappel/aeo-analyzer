@@ -4,6 +4,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useState, useImperativeHandle, forwardRef } from "react";
+import { trackAnalysisStart } from "@/utils/analytics";
 
 // URL validation schema
 const urlSchema = z.object({
@@ -43,6 +44,9 @@ export const UrlForm = forwardRef<UrlFormRef, UrlFormProps>(
     const handleFormSubmit = async (data: UrlFormData) => {
       setIsSubmitting(true);
       try {
+        // Track the analysis start event
+        trackAnalysisStart(data.url);
+        
         onSubmit(data.url);
       } catch (error) {
         console.error("Error submitting form:", error);
@@ -74,6 +78,7 @@ export const UrlForm = forwardRef<UrlFormRef, UrlFormProps>(
         </div>
 
         <button
+          id="analyze-website-btn"
           type="submit"
           disabled={isSubmitting}
           className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed text-white font-semibold py-4 px-6 rounded-lg text-lg transition-colors duration-200"

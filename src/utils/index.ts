@@ -1,6 +1,13 @@
-/**
- * Utility exports
- */
+// Shared utilities for the AEO Analyzer app
 
+// Logger utilities
 export { default as logger } from './logger';
-export type { Logger, LogLevel, ColorCodes } from './logger'; 
+
+// Analytics utilities
+export { 
+  trackEvent, 
+  trackPageView, 
+  trackAnalysisStart, 
+  trackAnalysisComplete, 
+  trackAnalysisError 
+} from './analytics'; 

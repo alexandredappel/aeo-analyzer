@@ -22,8 +22,22 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Determine if we should load analytics
+  const shouldLoadAnalytics = process.env.NODE_ENV === 'production' && 
+    (process.env.VERCEL_URL?.includes('ai-generative-engine-optimization.com') || 
+     process.env.NEXT_PUBLIC_DOMAIN === 'ai-generative-engine-optimization.com');
+
   return (
     <html lang="en">
+      <head>
+        {shouldLoadAnalytics && (
+          <script 
+            defer 
+            src="https://cloud.umami.is/script.js" 
+            data-website-id="0bbadb1b-8661-4f21-9d45-02bf61466237"
+          />
+        )}
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
