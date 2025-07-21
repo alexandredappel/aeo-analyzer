@@ -13,7 +13,7 @@ export default function Home() {
   const urlFormRef = useRef<UrlFormRef>(null);
 
   const handleUrlSubmit = (url: string) => {
-    // Redirect to report page with encoded URL
+    // Redirect to report page with encoded URL - analysis will start automatically
     router.push(`/report?url=${encodeURIComponent(url)}`);
   };
 
@@ -29,7 +29,7 @@ export default function Home() {
         <div className="max-w-2xl w-full space-y-8 text-center">
           <HeroSection
             title="Optimize Your Content for AI Search"
-            subtitle="Analyze how well your pages perform in LLM-powered search engines"
+            subtitle="Analyze how well your pages perform in LLM-powered search engines. Analysis starts automatically after entering your URL."
           />
 
           <UrlForm ref={urlFormRef} onSubmit={handleUrlSubmit} />
