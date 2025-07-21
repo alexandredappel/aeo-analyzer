@@ -3,35 +3,71 @@
  * Handles HTML fetching, robots.txt, and sitemap.xml collection
  */
 
-const https = require('https');
-const http = require('http');
-const { URL } = require('url');
-const cheerio = require('cheerio');
-const logger = require('../utils/logger');
+import https from 'https';
+import http from 'http';
+import { URL } from 'url';
+import * as cheerio from 'cheerio';
+import logger from '@/utils/logger';
 
-// Configuration
-const TIMEOUT_MS = 10000; // 10 seconds timeout
-const USER_AGENT = 'AEO-Auditor-Bot/1.0 (+https://aeo-auditor.com)';
-const MAX_CONTENT_SIZE = 10 * 1024 * 1024; // 10MB limit
+// Configuration constants
+export const TIMEOUT_MS = 10000; // 10 seconds timeout
+export const USER_AGENT = 'AEO-Auditor-Bot/1.0 (+https://aeo-auditor.com)';
+export const MAX_CONTENT_SIZE = 10 * 1024 * 1024; // 10MB limit
+
+// Types and interfaces
+interface RequestOptions {
+  method?: string;
+  headers?: Record<string, string>;
+}
+
+interface RequestResponse {
+  statusCode: number;
+  headers: Record<string, string | string[] | undefined>;
+  body: string;
+}
+
+interface FetchMetadata {
+  statusCode?: number;
+  contentLength?: number;
+  responseTime: number;
+  contentType?: string;
+}
+
+interface CrawlResult {
+  success: boolean;
+  data?: string;
+  error?: string;
+  metadata: FetchMetadata;
+}
+
+interface BasicMetadata {
+  title: string | null;
+  description: string | null;
+  charset: string;
+  viewport: string | null;
+  canonical: string | null;
+  robots: string | null;
+}
 
 /**
  * Validate and normalize URL
- * @param {string} urlString - URL to validate
- * @returns {URL} Normalized URL object
- * @throws {Error} If URL is invalid
+ * @param urlString - URL to validate
+ * @returns Normalized URL object
+ * @throws Error if URL is invalid
  */
-function validateAndNormalizeUrl(urlString) {
+export function validateAndNormalizeUrl(urlString: string): URL {
   if (!urlString || typeof urlString !== 'string') {
     throw new Error('URL must be a non-empty string');
   }
 
   // Add protocol if missing
+  let normalizedUrl = urlString;
   if (!urlString.match(/^https?:\/\//)) {
-    urlString = 'https://' + urlString;
+    normalizedUrl = 'https://' + urlString;
   }
 
   try {
-    const url = new URL(urlString);
+    const url = new URL(normalizedUrl);
     
     // Only allow HTTP and HTTPS
     if (!['http:', 'https:'].includes(url.protocol)) {
@@ -54,7 +90,7 @@ function validateAndNormalizeUrl(urlString) {
 
     return url;
   } catch (error) {
-    if (error.code === 'ERR_INVALID_URL') {
+    if (error instanceof Error && (error as any).code === 'ERR_INVALID_URL') {
       throw new Error(`Invalid URL format: ${urlString}`);
     }
     throw error;
@@ -63,12 +99,12 @@ function validateAndNormalizeUrl(urlString) {
 
 /**
  * Make HTTP request with timeout, size limits, and redirect handling
- * @param {URL} url - URL to fetch
- * @param {Object} options - Request options
- * @param {number} redirectCount - Current redirect count (for preventing infinite loops)
- * @returns {Promise<{statusCode, headers, body}>}
+ * @param url - URL to fetch
+ * @param options - Request options
+ * @param redirectCount - Current redirect count (for preventing infinite loops)
+ * @returns Promise with response data
  */
-function makeRequest(url, options = {}, redirectCount = 0) {
+function makeRequest(url: URL, options: RequestOptions = {}, redirectCount: number = 0): Promise<RequestResponse> {
   const MAX_REDIRECTS = 5;
   
   return new Promise((resolve, reject) => {
@@ -94,7 +130,7 @@ function makeRequest(url, options = {}, redirectCount = 0) {
       let data = '';
       let size = 0;
 
-      res.on('data', (chunk) => {
+      res.on('data', (chunk: Buffer) => {
         size += chunk.length;
         
         if (size > MAX_CONTENT_SIZE) {
@@ -103,7 +139,7 @@ function makeRequest(url, options = {}, redirectCount = 0) {
           return;
         }
         
-        data += chunk;
+        data += chunk.toString();
       });
 
       res.on('end', () => {
@@ -118,9 +154,9 @@ function makeRequest(url, options = {}, redirectCount = 0) {
           
           try {
             // Handle relative URLs
-            const redirectUrl = res.headers.location.startsWith('http') 
+            const redirectUrl = typeof res.headers.location === 'string' && res.headers.location.startsWith('http') 
               ? new URL(res.headers.location)
-              : new URL(res.headers.location, url);
+              : new URL(res.headers.location as string, url);
             
             // Follow the redirect
             makeRequest(redirectUrl, options, redirectCount + 1)
@@ -135,13 +171,13 @@ function makeRequest(url, options = {}, redirectCount = 0) {
         
         // Normal response
         resolve({
-          statusCode: res.statusCode,
+          statusCode: res.statusCode || 0,
           headers: res.headers,
           body: data
         });
       });
 
-      res.on('error', (error) => {
+      res.on('error', (error: Error) => {
         reject(new Error(`Response error: ${error.message}`));
       });
     });
@@ -151,7 +187,7 @@ function makeRequest(url, options = {}, redirectCount = 0) {
       reject(new Error(`Request timeout after ${TIMEOUT_MS}ms`));
     });
 
-    req.on('error', (error) => {
+    req.on('error', (error: any) => {
       if (error.code === 'ENOTFOUND') {
         reject(new Error(`Domain not found: ${url.hostname}`));
       } else if (error.code === 'ECONNREFUSED') {
@@ -167,10 +203,10 @@ function makeRequest(url, options = {}, redirectCount = 0) {
 
 /**
  * Fetch static HTML content from URL
- * @param {string} urlString - URL to fetch
- * @returns {Promise<{success: boolean, data?: string, error?: string}>}
+ * @param urlString - URL to fetch
+ * @returns Promise with crawl result
  */
-async function fetchStaticHTML(urlString) {
+export async function fetchStaticHTML(urlString: string): Promise<CrawlResult> {
   const startTime = Date.now();
   
   try {
@@ -191,7 +227,7 @@ async function fetchStaticHTML(urlString) {
           statusCode: response.statusCode,
           contentLength: response.body.length,
           responseTime: elapsed,
-          contentType: response.headers['content-type'] || 'unknown'
+          contentType: (response.headers['content-type'] as string) || 'unknown'
         }
       };
     } else {
@@ -209,11 +245,11 @@ async function fetchStaticHTML(urlString) {
     }
   } catch (error) {
     const elapsed = Date.now() - startTime;
-    logger.error(`Failed to fetch HTML from ${urlString}`, error);
+    logger.error(`Failed to fetch HTML from ${urlString}: ${(error as Error).message}`);
     
     return {
       success: false,
-      error: error.message,
+      error: (error as Error).message,
       metadata: {
         responseTime: elapsed
       }
@@ -223,10 +259,10 @@ async function fetchStaticHTML(urlString) {
 
 /**
  * Fetch robots.txt file
- * @param {string} urlString - Base URL to fetch robots.txt from
- * @returns {Promise<{success: boolean, data?: string, error?: string}>}
+ * @param urlString - Base URL to fetch robots.txt from
+ * @returns Promise with crawl result
  */
-async function fetchRobotsTxt(urlString) {
+export async function fetchRobotsTxt(urlString: string): Promise<CrawlResult> {
   const startTime = Date.now();
   
   try {
@@ -276,11 +312,11 @@ async function fetchRobotsTxt(urlString) {
     }
   } catch (error) {
     const elapsed = Date.now() - startTime;
-    logger.error(`Failed to fetch robots.txt from ${urlString}`, error);
+    logger.error(`Failed to fetch robots.txt from ${urlString}: ${(error as Error).message}`);
     
     return {
       success: false,
-      error: error.message,
+      error: (error as Error).message,
       metadata: {
         responseTime: elapsed
       }
@@ -290,10 +326,10 @@ async function fetchRobotsTxt(urlString) {
 
 /**
  * Fetch sitemap.xml file
- * @param {string} urlString - Base URL to fetch sitemap.xml from
- * @returns {Promise<{success: boolean, data?: string, error?: string}>}
+ * @param urlString - Base URL to fetch sitemap.xml from
+ * @returns Promise with crawl result
  */
-async function fetchSitemap(urlString) {
+export async function fetchSitemap(urlString: string): Promise<CrawlResult> {
   const startTime = Date.now();
   
   try {
@@ -343,11 +379,11 @@ async function fetchSitemap(urlString) {
     }
   } catch (error) {
     const elapsed = Date.now() - startTime;
-    logger.error(`Failed to fetch sitemap.xml from ${urlString}`, error);
+    logger.error(`Failed to fetch sitemap.xml from ${urlString}: ${(error as Error).message}`);
     
     return {
       success: false,
-      error: error.message,
+      error: (error as Error).message,
       metadata: {
         responseTime: elapsed
       }
@@ -357,10 +393,10 @@ async function fetchSitemap(urlString) {
 
 /**
  * Extract basic metadata from HTML content
- * @param {string} html - HTML content
- * @returns {Object} Basic metadata extracted from HTML
+ * @param html - HTML content
+ * @returns Basic metadata extracted from HTML
  */
-function extractBasicMetadata(html) {
+export function extractBasicMetadata(html: string): BasicMetadata {
   try {
     const $ = cheerio.load(html);
     
@@ -375,18 +411,17 @@ function extractBasicMetadata(html) {
       robots: $('meta[name="robots"]').attr('content') || null
     };
   } catch (error) {
-    logger.warn('Failed to extract metadata from HTML', error);
-    return {};
+    logger.warn(`Failed to extract metadata from HTML: ${(error as Error).message}`);
+    return {
+      title: null,
+      description: null,
+      charset: 'unknown',
+      viewport: null,
+      canonical: null,
+      robots: null
+    };
   }
 }
 
-module.exports = {
-  validateAndNormalizeUrl,
-  fetchStaticHTML,
-  fetchRobotsTxt,
-  fetchSitemap,
-  extractBasicMetadata,
-  TIMEOUT_MS,
-  USER_AGENT,
-  MAX_CONTENT_SIZE
-}; 
+// Export types for external use
+export type { CrawlResult, BasicMetadata, FetchMetadata, RequestOptions, RequestResponse }; 

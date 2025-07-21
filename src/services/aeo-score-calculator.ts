@@ -1,10 +1,68 @@
-const logger = require('../utils/logger');
+import logger from '@/utils/logger';
 
 /**
  * AEO Score Calculator Service
  * Calculates weighted AEO score from 5 analysis categories
  */
-class AEOScoreCalculator {
+
+// Types and interfaces
+interface WeightConfig {
+  readonly discoverability: number;
+  readonly structuredData: number;
+  readonly llmFormatting: number;
+  readonly accessibility: number;
+  readonly readability: number;
+}
+
+interface CategoryBreakdown {
+  score: number;
+  weight: number;
+  contribution: number;
+  status?: string;
+}
+
+interface ScoreBreakdown {
+  discoverability: CategoryBreakdown;
+  structuredData: CategoryBreakdown;
+  llmFormatting: CategoryBreakdown;
+  accessibility: CategoryBreakdown;
+  readability: CategoryBreakdown;
+}
+
+interface ScoreMetadata {
+  totalWeight: number;
+  completedAnalyses: number;
+  totalAnalyses: number;
+}
+
+interface AEOScoreResult {
+  totalScore: number;
+  maxScore: number;
+  breakdown: ScoreBreakdown;
+  completeness: string;
+  metadata: ScoreMetadata;
+  error?: string;
+}
+
+interface AnalysisResult {
+  score?: number;
+  status?: string;
+}
+
+interface AnalysisResults {
+  discoverability?: AnalysisResult;
+  structuredData?: AnalysisResult;
+  llmFormatting?: AnalysisResult;
+  accessibility?: AnalysisResult;
+  readability?: AnalysisResult;
+}
+
+type ScoreStatus = 'excellent' | 'good' | 'pass' | 'needs-improvement' | 'fail';
+type ScoreLevel = 'Excellent' | 'Good' | 'Pass' | 'Needs Improvement' | 'Fail';
+
+export class AEOScoreCalculator {
+  private weights: WeightConfig;
+
   constructor() {
     // Weights for each analysis category (total: 100%)
     this.weights = {
@@ -13,7 +71,7 @@ class AEOScoreCalculator {
       llmFormatting: 22,      // 22% - LLM-friendly structure
       accessibility: 17,      // 17% - Core Web Vitals
       readability: 11         // 11% - Content optimization
-    };
+    } as const;
 
     // Validate weights sum to 100
     const totalWeight = Object.values(this.weights).reduce((sum, weight) => sum + weight, 0);
@@ -24,20 +82,20 @@ class AEOScoreCalculator {
 
   /**
    * Calculate weighted AEO score from analysis results
-   * @param {Object} analysisResults - Results from all analyzers
-   * @returns {Object} AEO score with breakdown
+   * @param analysisResults - Results from all analyzers
+   * @returns AEO score with breakdown
    */
-  calculateAEOScore(analysisResults) {
+  calculateAEOScore(analysisResults: AnalysisResults): AEOScoreResult {
     try {
       logger.info('Starting AEO score calculation');
 
-      const breakdown = {};
+      const breakdown: Partial<ScoreBreakdown> = {};
       let totalScore = 0;
       let completedAnalyses = 0;
       let totalWeight = 0;
 
       // Process each analysis category
-      for (const [category, weight] of Object.entries(this.weights)) {
+      for (const [category, weight] of Object.entries(this.weights) as [keyof WeightConfig, number][]) {
         const analysis = analysisResults[category];
         
         if (analysis && typeof analysis.score === 'number' && (analysis.status === 'complete' || analysis.status === undefined)) {
@@ -54,7 +112,7 @@ class AEOScoreCalculator {
           totalWeight += weight;
           completedAnalyses++;
           
-          logger.info(`${category}: score=${score}, weight=${weight}%, contribution=${breakdown[category].contribution}`);
+          logger.info(`${category}: score=${score}, weight=${weight}%, contribution=${breakdown[category]!.contribution}`);
         } else {
           // Analysis not available or failed
           breakdown[category] = {
@@ -74,10 +132,10 @@ class AEOScoreCalculator {
       // Determine completeness
       const completeness = `${completedAnalyses}/${Object.keys(this.weights).length} analyses completed`;
 
-      const result = {
+      const result: AEOScoreResult = {
         totalScore: finalScore,
         maxScore: 100,
-        breakdown: breakdown,
+        breakdown: breakdown as ScoreBreakdown,
         completeness: completeness,
         metadata: {
           totalWeight: totalWeight,
@@ -90,17 +148,17 @@ class AEOScoreCalculator {
       return result;
 
     } catch (error) {
-      logger.error('Error calculating AEO score:', error);
+      logger.error(`Error calculating AEO score: ${(error as Error).message}`);
       return this.createEmptyResult('Score calculation failed due to technical error');
     }
   }
 
   /**
    * Get score status for consistency with other analyzers
-   * @param {number} score - Score 0-100
-   * @returns {string} Status description
+   * @param score - Score 0-100
+   * @returns Status description
    */
-  getScoreStatus(score) {
+  getScoreStatus(score: number): ScoreStatus {
     if (score >= 90) return 'excellent';
     if (score >= 80) return 'good';
     if (score >= 70) return 'pass';
@@ -110,10 +168,10 @@ class AEOScoreCalculator {
 
   /**
    * Get score level description
-   * @param {number} score - Score 0-100
-   * @returns {string} Level description
+   * @param score - Score 0-100
+   * @returns Level description
    */
-  getScoreLevel(score) {
+  getScoreLevel(score: number): ScoreLevel {
     if (score >= 90) return 'Excellent';
     if (score >= 80) return 'Good';
     if (score >= 70) return 'Pass';
@@ -123,10 +181,10 @@ class AEOScoreCalculator {
 
   /**
    * Create empty result for error cases
-   * @param {string} errorMessage - Error description
-   * @returns {Object} Empty result structure
+   * @param errorMessage - Error description
+   * @returns Empty result structure
    */
-  createEmptyResult(errorMessage) {
+  private createEmptyResult(errorMessage: string): AEOScoreResult {
     return {
       totalScore: 0,
       maxScore: 100,
@@ -149,25 +207,39 @@ class AEOScoreCalculator {
 
   /**
    * Get weights configuration
-   * @returns {Object} Current weights
+   * @returns Current weights
    */
-  getWeights() {
+  getWeights(): WeightConfig {
     return { ...this.weights };
   }
 
   /**
    * Update weights (for future flexibility)
-   * @param {Object} newWeights - New weight configuration
+   * @param newWeights - New weight configuration
    */
-  updateWeights(newWeights) {
+  updateWeights(newWeights: WeightConfig): void {
     const totalWeight = Object.values(newWeights).reduce((sum, weight) => sum + weight, 0);
     if (totalWeight !== 100) {
       throw new Error(`Weights must sum to 100, got ${totalWeight}`);
     }
     
     this.weights = { ...newWeights };
-    logger.info('AEO weights updated:', this.weights);
+    logger.info(`AEO weights updated: ${JSON.stringify(this.weights)}`);
   }
 }
 
-module.exports = AEOScoreCalculator; 
+// Export types for external use
+export type { 
+  AEOScoreResult, 
+  ScoreBreakdown, 
+  CategoryBreakdown, 
+  WeightConfig, 
+  AnalysisResults, 
+  AnalysisResult,
+  ScoreStatus,
+  ScoreLevel,
+  ScoreMetadata
+};
+
+// Export default instance for convenience
+export default AEOScoreCalculator; 

@@ -1,11 +1,86 @@
-const logger = require('../utils/logger');
+import logger from '@/utils/logger';
 
 /**
  * Readability Analyzer Service
  * Analyzes content readability using Flesch-Kincaid scoring and content density metrics
  * Optimized for LLM understanding and search engine visibility
  */
-class ReadabilityAnalyzer {
+
+// Types and interfaces
+interface ReadabilityWeights {
+  fleschScore: number;
+  sentenceComplexity: number;
+  contentDensity: number;
+}
+
+interface AnalysisOptions {
+  language?: string;
+  minContentLength?: number;
+}
+
+interface ReadabilityBreakdown {
+  fleschScore: {
+    score: number;
+    maxScore: number;
+    status: string;
+    details: string;
+  };
+  sentenceComplexity: {
+    score: number;
+    maxScore: number;
+    status: string;
+    details: string;
+  };
+  contentDensity: {
+    score: number;
+    maxScore: number;
+    status: string;
+    details: string;
+  };
+}
+
+interface ReadabilityDetails {
+  fleschLevel: string;
+  averageSentenceLength: number;
+  wordCount: number;
+  uniqueWords: number;
+  contentDensityRatio: number;
+}
+
+interface ReadabilityRecommendation {
+  category: string;
+  priority: 'critical' | 'high' | 'medium' | 'low';
+  title: string;
+  description: string;
+  impact: string;
+}
+
+interface ComplexityMetric {
+  length: number;
+  syllablesPerWord: number;
+  complexWordRatio: number;
+}
+
+interface ReadabilityResult {
+  score: number;
+  maxScore: number;
+  breakdown: ReadabilityBreakdown;
+  details: ReadabilityDetails;
+  recommendations: string[];
+  status: string;
+  error?: string;
+}
+
+interface ScoreAnalysis {
+  fleschScore: number;
+  sentenceComplexity: number;
+  contentDensity: number;
+  totalScore: number;
+}
+
+export class ReadabilityAnalyzer {
+  private weights: ReadabilityWeights;
+
   constructor() {
     this.weights = {
       fleschScore: 0.40,      // 40% - Flesch-Kincaid readability score
@@ -16,19 +91,19 @@ class ReadabilityAnalyzer {
 
   /**
    * Main analysis method
-   * @param {string} htmlContent - Raw HTML content
-   * @param {string} url - URL being analyzed (optional)
-   * @param {Object} options - Analysis options
-   * @returns {Object} Readability analysis results
+   * @param htmlContent - Raw HTML content
+   * @param url - URL being analyzed (optional)
+   * @param options - Analysis options
+   * @returns Readability analysis results
    */
-  async analyze(htmlContent, url = '', options = {}) {
+  async analyze(htmlContent: string, url: string = '', options: AnalysisOptions = {}): Promise<ReadabilityResult> {
     try {
       logger.info('Starting readability analysis');
 
       // Extract text content from HTML
       const textContent = this.extractTextContent(htmlContent);
       
-      if (!textContent || textContent.trim().length < 50) {
+      if (!textContent || textContent.trim().length < (options.minContentLength || 50)) {
         return this.createEmptyResult('Insufficient text content for analysis');
       }
 
@@ -43,7 +118,8 @@ class ReadabilityAnalyzer {
       const totalScore = this.calculateWeightedScore({
         fleschScore,
         sentenceComplexity,
-        contentDensity
+        contentDensity,
+        totalScore: 0
       });
 
       // Generate recommendations
@@ -56,7 +132,8 @@ class ReadabilityAnalyzer {
 
       logger.info(`Generated ${recommendations.length} recommendations`);
       recommendations.forEach((rec, index) => {
-        logger.info(`Recommendation ${index + 1}: ${rec.description || rec.title}`);
+        const recText = typeof rec === 'string' ? rec : (rec.description || rec.title || 'Readability recommendation');
+        logger.info(`Recommendation ${index + 1}: ${recText}`);
       });
 
       // Convert recommendations to strings
@@ -70,7 +147,7 @@ class ReadabilityAnalyzer {
 
       logger.info(`Mapped recommendations: ${JSON.stringify(recommendationStrings)}`);
 
-      const result = {
+      const result: ReadabilityResult = {
         score: Math.round(totalScore),
         maxScore: 100,
         breakdown: {
@@ -108,17 +185,17 @@ class ReadabilityAnalyzer {
       return result;
 
     } catch (error) {
-      logger.error('Error in readability analysis:', error);
+      logger.error(`Error in readability analysis: ${(error as Error).message}`);
       return this.createEmptyResult('Analysis failed due to technical error');
     }
   }
 
   /**
    * Extract clean text content from HTML
-   * @param {string} htmlContent - Raw HTML
-   * @returns {string} Clean text content
+   * @param htmlContent - Raw HTML
+   * @returns Clean text content
    */
-  extractTextContent(htmlContent) {
+  extractTextContent(htmlContent: string): string {
     try {
       // Remove script and style tags
       let text = htmlContent
@@ -147,17 +224,17 @@ class ReadabilityAnalyzer {
 
       return text;
     } catch (error) {
-      logger.error('Error extracting text content:', error);
+      logger.error(`Error extracting text content: ${(error as Error).message}`);
       return '';
     }
   }
 
   /**
    * Calculate Flesch-Kincaid readability score
-   * @param {string} text - Clean text content
-   * @returns {number} Score 0-100
+   * @param text - Clean text content
+   * @returns Score 0-100
    */
-  calculateFleschScore(text) {
+  calculateFleschScore(text: string): number {
     try {
       const sentences = this.splitIntoSentences(text);
       const words = this.splitIntoWords(text);
@@ -187,22 +264,22 @@ class ReadabilityAnalyzer {
 
       return Math.round(normalizedScore);
     } catch (error) {
-      logger.error('Error calculating Flesch score:', error);
+      logger.error(`Error calculating Flesch score: ${(error as Error).message}`);
       return 0;
     }
   }
 
   /**
    * Analyze sentence complexity
-   * @param {string} text - Clean text content
-   * @returns {number} Score 0-100
+   * @param text - Clean text content
+   * @returns Score 0-100
    */
-  analyzeSentenceComplexity(text) {
+  analyzeSentenceComplexity(text: string): number {
     try {
       const sentences = this.splitIntoSentences(text);
       if (sentences.length === 0) return 0;
 
-      const complexityMetrics = sentences.map(sentence => {
+      const complexityMetrics: ComplexityMetric[] = sentences.map(sentence => {
         const words = this.splitIntoWords(sentence);
         const syllables = this.countSyllables(sentence);
         const complexWords = this.countComplexWords(sentence);
@@ -241,18 +318,18 @@ class ReadabilityAnalyzer {
 
       return Math.max(0, Math.min(100, Math.round(score)));
     } catch (error) {
-      logger.error('Error analyzing sentence complexity:', error);
+      logger.error(`Error analyzing sentence complexity: ${(error as Error).message}`);
       return 0;
     }
   }
 
   /**
    * Analyze content density and information richness
-   * @param {string} text - Clean text content
-   * @param {string} htmlContent - Raw HTML for context
-   * @returns {number} Score 0-100
+   * @param text - Clean text content
+   * @param htmlContent - Raw HTML for context
+   * @returns Score 0-100
    */
-  analyzeContentDensity(text, htmlContent) {
+  analyzeContentDensity(text: string, htmlContent: string): number {
     try {
       const words = this.splitIntoWords(text);
       const uniqueWords = this.getUniqueWordCount(text);
@@ -307,17 +384,17 @@ class ReadabilityAnalyzer {
 
       return Math.max(0, Math.min(100, Math.round(score)));
     } catch (error) {
-      logger.error('Error analyzing content density:', error);
+      logger.error(`Error analyzing content density: ${(error as Error).message}`);
       return 0;
     }
   }
 
   /**
    * Calculate weighted total score
-   * @param {Object} scores - Individual scores
-   * @returns {number} Weighted total score
+   * @param scores - Individual scores
+   * @returns Weighted total score
    */
-  calculateWeightedScore(scores) {
+  calculateWeightedScore(scores: ScoreAnalysis): number {
     return (
       scores.fleschScore * this.weights.fleschScore +
       scores.sentenceComplexity * this.weights.sentenceComplexity +
@@ -327,11 +404,11 @@ class ReadabilityAnalyzer {
 
   /**
    * Generate LLM-specific recommendations
-   * @param {Object} scores - Analysis scores
-   * @returns {Array} Recommendations
+   * @param scores - Analysis scores
+   * @returns Recommendations
    */
-  generateRecommendations(scores) {
-    const recommendations = [];
+  generateRecommendations(scores: ScoreAnalysis): Array<ReadabilityRecommendation | string> {
+    const recommendations: Array<ReadabilityRecommendation | string> = [];
 
     // Flesch score recommendations
     if (scores.fleschScore < 50) {
@@ -390,10 +467,10 @@ class ReadabilityAnalyzer {
 
   /**
    * Get Flesch reading level description
-   * @param {number} score - Flesch score
-   * @returns {string} Reading level
+   * @param score - Flesch score
+   * @returns Reading level
    */
-  getFleschLevel(score) {
+  getFleschLevel(score: number): string {
     if (score >= 90) return 'Elementary';
     if (score >= 80) return 'High School';
     if (score >= 70) return 'College';
@@ -404,10 +481,10 @@ class ReadabilityAnalyzer {
 
   /**
    * Get score status for consistency with other analyzers
-   * @param {number} score - Score 0-100
-   * @returns {string} Status description
+   * @param score - Score 0-100
+   * @returns Status description
    */
-  getScoreStatus(score) {
+  getScoreStatus(score: number): string {
     if (score >= 90) return 'excellent';
     if (score >= 80) return 'good';
     if (score >= 70) return 'pass';
@@ -416,7 +493,7 @@ class ReadabilityAnalyzer {
   }
 
   // Helper methods for text analysis
-  splitIntoSentences(text) {
+  splitIntoSentences(text: string): string[] {
     return text
       .replace(/([.!?])\s*(?=[A-Z])/g, '$1|')
       .split('|')
@@ -424,7 +501,7 @@ class ReadabilityAnalyzer {
       .filter(s => s.length > 0);
   }
 
-  splitIntoWords(text) {
+  splitIntoWords(text: string): string[] {
     return text
       .toLowerCase()
       .replace(/[^\w\s]/g, '')
@@ -432,14 +509,14 @@ class ReadabilityAnalyzer {
       .filter(word => word.length > 0);
   }
 
-  splitIntoParagraphs(text) {
+  splitIntoParagraphs(text: string): string[] {
     return text
       .split(/\n\s*\n/)
       .map(p => p.trim())
       .filter(p => p.length > 0);
   }
 
-  countSyllables(text) {
+  countSyllables(text: string): number {
     // Simple syllable counting algorithm
     const words = this.splitIntoWords(text);
     return words.reduce((count, word) => {
@@ -447,7 +524,7 @@ class ReadabilityAnalyzer {
     }, 0);
   }
 
-  countWordSyllables(word) {
+  countWordSyllables(word: string): number {
     word = word.toLowerCase();
     if (word.length <= 3) return 1;
     
@@ -458,37 +535,37 @@ class ReadabilityAnalyzer {
     return syllables ? syllables.length : 1;
   }
 
-  countComplexWords(text) {
+  countComplexWords(text: string): number {
     const words = this.splitIntoWords(text);
     return words.filter(word => this.countWordSyllables(word) >= 3).length;
   }
 
-  getWordCount(text) {
+  getWordCount(text: string): number {
     return this.splitIntoWords(text).length;
   }
 
-  getUniqueWordCount(text) {
+  getUniqueWordCount(text: string): number {
     const words = this.splitIntoWords(text);
     return new Set(words).size;
   }
 
-  getAverageSentenceLength(text) {
+  getAverageSentenceLength(text: string): number {
     const sentences = this.splitIntoSentences(text);
     const words = this.splitIntoWords(text);
     return sentences.length > 0 ? Math.round((words.length / sentences.length) * 10) / 10 : 0;
   }
 
-  calculateContentDensityRatio(text, htmlContent) {
+  calculateContentDensityRatio(text: string, htmlContent: string): number {
     if (!htmlContent || htmlContent.length === 0) return 0;
     return text.length / htmlContent.length;
   }
 
   /**
    * Create empty result for error cases
-   * @param {string} errorMessage - Error description
-   * @returns {Object} Empty result structure
+   * @param errorMessage - Error description
+   * @returns Empty result structure
    */
-  createEmptyResult(errorMessage) {
+  createEmptyResult(errorMessage: string): ReadabilityResult {
     return {
       score: 0,
       maxScore: 100,
@@ -526,4 +603,16 @@ class ReadabilityAnalyzer {
   }
 }
 
-module.exports = ReadabilityAnalyzer; 
+// Export types for external use
+export type {
+  ReadabilityResult,
+  ReadabilityWeights,
+  ReadabilityBreakdown,
+  ReadabilityDetails,
+  ReadabilityRecommendation,
+  AnalysisOptions,
+  ComplexityMetric,
+  ScoreAnalysis
+};
+
+export default ReadabilityAnalyzer; 

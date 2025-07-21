@@ -133,11 +133,8 @@ export function useAnalysis() {
     setLogs([initialLog]);
 
     try {
-      const apiUrl = process.env.NODE_ENV === 'production' 
-        ? '/api/collect-data' 
-        : 'http://localhost:3001/api/collect-data';
-
-      const response = await fetch(apiUrl, {
+      // Use Next.js API Routes (available in both development and production)
+      const response = await fetch('/api/collect-data', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

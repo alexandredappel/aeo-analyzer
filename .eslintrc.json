@@ -1,0 +1,15 @@
+{
+  "extends": ["next/core-web-vitals"],
+  "rules": {
+    "@typescript-eslint/no-explicit-any": "off",
+    "@typescript-eslint/no-unused-vars": "off", 
+    "prefer-const": "off",
+    "@next/next/no-img-element": "error",
+    "@next/next/no-page-custom-font": "warn"
+  },
+  "env": {
+    "es2022": true,
+    "node": true
+  },
+  "ignorePatterns": ["node_modules/", ".next/", "out/", "build/"]
+} 

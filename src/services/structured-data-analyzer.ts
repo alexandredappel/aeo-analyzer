@@ -4,12 +4,164 @@
  * Version 2.0 - Enhanced with advanced validation and context-aware recommendations
  */
 
-const cheerio = require('cheerio');
-const logger = require('../utils/logger');
-const https = require('https');
-const http = require('http');
+import * as cheerio from 'cheerio';
+import logger from '@/utils/logger';
+import https from 'https';
+import http from 'http';
 
-class StructuredDataAnalyzer {
+// Types and interfaces
+interface CriteriaWeights {
+  jsonLd: {
+    presence: number;
+    validity: number;
+    schemaTypes: number;
+    completeness: number;
+  };
+  metaTags: {
+    title: number;
+    description: number;
+    technical: number;
+  };
+  openGraph: {
+    basic: number;
+    image: number;
+  };
+  microData: {
+    bonus: number;
+  };
+}
+
+interface SchemaTypes {
+  [key: string]: number;
+}
+
+interface RequiredFields {
+  [schemaType: string]: string[];
+}
+
+interface ValidationDetails {
+  validSchemas: string[];
+  invalidSchemas: string[];
+  completenessScores: Record<string, CompletenessValidation>;
+  totalScripts: number;
+}
+
+interface CompletenessValidation {
+  score: number;
+  required: string[];
+  present: string[];
+  missing: string[];
+  percentage: number;
+}
+
+interface AnalysisResult {
+  score: number;
+  maxScore: number;
+  status: string;
+  details: string;
+  validationDetails?: ValidationDetails;
+  breakdown?: any;
+}
+
+interface TitleAnalysis {
+  score: number;
+  maxScore: number;
+  status: string;
+  details: {
+    length: number;
+    text: string;
+    assessment: string;
+    warning?: string;
+  };
+}
+
+interface DescriptionAnalysis {
+  score: number;
+  maxScore: number;
+  status: string;
+  details: {
+    length: number;
+    text: string;
+    assessment: string;
+    uniqueness: number;
+  };
+}
+
+interface TechnicalMetaAnalysis {
+  score: number;
+  maxScore: number;
+  details: {
+    viewport: { present: boolean; content?: string };
+    charset: { present: boolean; value?: string };
+    robots: { 
+      present: boolean; 
+      content?: string; 
+      analysis?: {
+        index: boolean;
+        follow: boolean;
+        archive: boolean;
+        snippet: boolean;
+        directives: string[];
+      };
+    };
+  };
+}
+
+interface ImageValidation {
+  score: number;
+  maxScore: number;
+  details: {
+    present: boolean;
+    url?: string;
+    validUrl?: boolean;
+    protocol?: string;
+    format?: string;
+    supportedFormat?: boolean;
+    assessment?: string;
+    warning?: string;
+    error?: string;
+  };
+}
+
+interface UrlContext {
+  type: 'ecommerce' | 'blog' | 'business' | 'general';
+  confidence: number;
+}
+
+interface Recommendation {
+  priority: 'critical' | 'high' | 'medium' | 'low';
+  category: string;
+  message: string;
+  impact: string;
+}
+
+interface StructuredDataResult {
+  category: string;
+  score: number;
+  maxScore: number;
+  breakdown: {
+    jsonLd: AnalysisResult;
+    metaTags: AnalysisResult;
+    openGraph: AnalysisResult;
+    microData: AnalysisResult;
+  };
+  recommendations: string[];
+  metadata: {
+    analyzedAt: string;
+    version: string;
+    features: string[];
+  };
+  error?: string;
+}
+
+export class StructuredDataAnalyzer {
+  private maxScore: number;
+  private criteria: CriteriaWeights;
+  private schemaTypes: SchemaTypes;
+  private requiredFields: RequiredFields;
+  private schemaCache: Map<string, any>;
+  private imageCache: Map<string, ImageValidation>;
+
   constructor() {
     this.maxScore = 100;
     
@@ -74,11 +226,11 @@ class StructuredDataAnalyzer {
 
   /**
    * Main analysis method with enhanced features
-   * @param {string} htmlContent - HTML content to analyze
-   * @param {string} url - URL being analyzed
-   * @returns {Object} Enhanced analysis results with advanced scoring and recommendations
+   * @param htmlContent - HTML content to analyze
+   * @param url - URL being analyzed
+   * @returns Enhanced analysis results with advanced scoring and recommendations
    */
-  async analyze(htmlContent, url) {
+  async analyze(htmlContent: string, url: string): Promise<StructuredDataResult> {
     logger.info('Starting advanced structured data analysis...');
     
     try {
@@ -129,35 +281,46 @@ class StructuredDataAnalyzer {
       };
       
     } catch (error) {
-      logger.error(`Advanced structured data analysis failed: ${error.message}`);
+      logger.error(`Advanced structured data analysis failed: ${(error as Error).message}`);
       
       return {
         category: 'structured-data',
         score: 0,
         maxScore: this.maxScore,
         breakdown: {
-          jsonLd: this.getFailureResult('jsonLd', error.message),
-          metaTags: this.getFailureResult('metaTags', error.message),
-          openGraph: this.getFailureResult('openGraph', error.message),
-          microData: this.getFailureResult('microData', error.message)
+          jsonLd: this.getFailureResult('jsonLd', (error as Error).message),
+          metaTags: this.getFailureResult('metaTags', (error as Error).message),
+          openGraph: this.getFailureResult('openGraph', (error as Error).message),
+          microData: this.getFailureResult('microData', (error as Error).message)
         },
-        recommendations: [`❌ Structured data analysis failed: ${error.message}`]
+        recommendations: [`❌ Structured data analysis failed: ${(error as Error).message}`],
+        metadata: {
+          analyzedAt: new Date().toISOString(),
+          version: '2.0',
+          features: ['error-recovery']
+        },
+        error: (error as Error).message
       };
     }
   }
 
   /**
    * Enhanced JSON-LD analysis with schema completeness validation
-   * @param {Object} $ - Cheerio instance
-   * @param {string} url - URL for context
-   * @returns {Object} Enhanced JSON-LD analysis result
+   * @param $ - Cheerio instance
+   * @param url - URL for context
+   * @returns Enhanced JSON-LD analysis result
    */
-  async analyzeEnhancedJsonLd($, url) {
+  async analyzeEnhancedJsonLd($: cheerio.CheerioAPI, url: string): Promise<AnalysisResult> {
     const maxScore = Object.values(this.criteria.jsonLd).reduce((a, b) => a + b, 0);
     let score = 0;
     let status = 'fail';
     let details = 'No JSON-LD structured data found';
-    let validationDetails = {};
+    let validationDetails: ValidationDetails = {
+      validSchemas: [],
+      invalidSchemas: [],
+      completenessScores: {},
+      totalScripts: 0
+    };
     
     try {
       const jsonLdScripts = $('script[type="application/ld+json"]');
@@ -166,9 +329,9 @@ class StructuredDataAnalyzer {
         return { score, maxScore, status, details, validationDetails };
       }
       
-      let validSchemas = [];
-      let invalidSchemas = [];
-      let completenessScores = {};
+      let validSchemas: string[] = [];
+      let invalidSchemas: string[] = [];
+      let completenessScores: Record<string, CompletenessValidation> = {};
       
       // Presence score
       score += this.criteria.jsonLd.presence;
@@ -176,6 +339,8 @@ class StructuredDataAnalyzer {
       for (let i = 0; i < jsonLdScripts.length; i++) {
         try {
           const content = $(jsonLdScripts[i]).html();
+          if (!content) continue;
+          
           const jsonLd = JSON.parse(content);
           
           // Validity score
@@ -207,15 +372,15 @@ class StructuredDataAnalyzer {
           }
           
         } catch (parseError) {
-          logger.warn(`Invalid JSON-LD found: ${parseError.message}`);
-          invalidSchemas.push(parseError.message);
+          logger.warn(`Invalid JSON-LD found: ${(parseError as Error).message}`);
+          invalidSchemas.push((parseError as Error).message);
         }
       }
       
       // Determine status and details
       if (validSchemas.length > 0) {
         status = score >= maxScore * 0.7 ? 'pass' : 'partial';
-        details = `Found ${validSchemas.length} valid schema(s): ${[...new Set(validSchemas)].join(', ')}`;
+        details = `Found ${validSchemas.length} valid schema(s): ${Array.from(new Set(validSchemas)).join(', ')}`;
         
         if (invalidSchemas.length > 0) {
           details += ` (${invalidSchemas.length} invalid)`;
@@ -223,15 +388,15 @@ class StructuredDataAnalyzer {
       }
       
       validationDetails = {
-        validSchemas: [...new Set(validSchemas)],
+        validSchemas: Array.from(new Set(validSchemas)),
         invalidSchemas,
         completenessScores,
         totalScripts: jsonLdScripts.length
       };
       
     } catch (error) {
-      logger.error(`Enhanced JSON-LD analysis error: ${error.message}`);
-      details = `JSON-LD analysis error: ${error.message}`;
+      logger.error(`Enhanced JSON-LD analysis error: ${(error as Error).message}`);
+      details = `JSON-LD analysis error: ${(error as Error).message}`;
     }
     
     return { score: Math.min(score, maxScore), maxScore, status, details, validationDetails };
@@ -239,15 +404,15 @@ class StructuredDataAnalyzer {
 
   /**
    * Enhanced meta tags analysis including technical tags
-   * @param {Object} $ - Cheerio instance
-   * @returns {Object} Enhanced meta tags analysis result
+   * @param $ - Cheerio instance
+   * @returns Enhanced meta tags analysis result
    */
-  analyzeEnhancedMetaTags($) {
+  analyzeEnhancedMetaTags($: cheerio.CheerioAPI): AnalysisResult {
     const maxScore = Object.values(this.criteria.metaTags).reduce((a, b) => a + b, 0);
     let score = 0;
     let status = 'fail';
     let details = '';
-    let breakdown = {};
+    let breakdown: any = {};
     
     try {
       // Title analysis (15 points)
@@ -270,7 +435,7 @@ class StructuredDataAnalyzer {
       // Generate readable details string
       const titleStatus = titleAnalysis.status || 'fail';
       const descStatus = descriptionAnalysis.status || 'fail';
-      const techCount = Object.values(technicalAnalysis.details || {}).filter(item => item.present).length;
+      const techCount = Object.values(technicalAnalysis.details || {}).filter((item: any) => item.present).length;
       
       details = `Title: ${titleStatus} (${title.length} chars), Description: ${descStatus} (${description.length} chars), Technical tags: ${techCount}/3`;
       
@@ -282,9 +447,9 @@ class StructuredDataAnalyzer {
       }
       
     } catch (error) {
-      logger.error(`Enhanced meta tags analysis error: ${error.message}`);
-      details = `Meta tags analysis error: ${error.message}`;
-      breakdown = { error: error.message };
+      logger.error(`Enhanced meta tags analysis error: ${(error as Error).message}`);
+      details = `Meta tags analysis error: ${(error as Error).message}`;
+      breakdown = { error: (error as Error).message };
     }
     
     return { score: Math.min(score, maxScore), maxScore, status, details, breakdown };
@@ -292,16 +457,16 @@ class StructuredDataAnalyzer {
 
   /**
    * Enhanced OpenGraph analysis with image validation
-   * @param {Object} $ - Cheerio instance
-   * @param {string} url - URL for context
-   * @returns {Object} Enhanced OpenGraph analysis result
+   * @param $ - Cheerio instance
+   * @param url - URL for context
+   * @returns Enhanced OpenGraph analysis result
    */
-  async analyzeEnhancedOpenGraph($, url) {
+  async analyzeEnhancedOpenGraph($: cheerio.CheerioAPI, url: string): Promise<AnalysisResult> {
     const maxScore = Object.values(this.criteria.openGraph).reduce((a, b) => a + b, 0);
     let score = 0;
     let status = 'fail';
     let details = '';
-    let breakdown = {};
+    let breakdown: any = {};
     
     try {
       const ogTags = {
@@ -343,7 +508,7 @@ class StructuredDataAnalyzer {
       breakdown.completeness = completeness;
       
       // Generate readable details string
-      const foundTags = [];
+      const foundTags: string[] = [];
       if (ogTags.title) foundTags.push('title');
       if (ogTags.description) foundTags.push('description');
       if (ogTags.image) foundTags.push('image');
@@ -362,9 +527,9 @@ class StructuredDataAnalyzer {
       }
       
     } catch (error) {
-      logger.error(`Enhanced OpenGraph analysis error: ${error.message}`);
-      details = `OpenGraph analysis error: ${error.message}`;
-      breakdown = { error: error.message };
+      logger.error(`Enhanced OpenGraph analysis error: ${(error as Error).message}`);
+      details = `OpenGraph analysis error: ${(error as Error).message}`;
+      breakdown = { error: (error as Error).message };
     }
     
     return { score: Math.min(score, maxScore), maxScore, status, details, breakdown };
@@ -372,31 +537,31 @@ class StructuredDataAnalyzer {
 
   /**
    * Analyze micro-data and RDFa support
-   * @param {Object} $ - Cheerio instance
-   * @returns {Object} Micro-data analysis result
+   * @param $ - Cheerio instance
+   * @returns Micro-data analysis result
    */
-  analyzeMicroData($) {
+  analyzeMicroData($: cheerio.CheerioAPI): AnalysisResult {
     const maxScore = this.criteria.microData.bonus;
     let score = 0;
     let status = 'none';
     let details = '';
-    let breakdown = {};
+    let breakdown: any = {};
     
     try {
       // Detect itemscope/itemtype attributes (micro-data)
       const microDataItems = $('[itemscope]');
-      const microDataTypes = [];
+      const microDataTypes: string[] = [];
       
       microDataItems.each((i, element) => {
         const itemType = $(element).attr('itemtype');
         if (itemType) {
-          microDataTypes.push(itemType.split('/').pop());
+          microDataTypes.push(itemType.split('/').pop() || '');
         }
       });
       
       // Detect RDFa attributes
       const rdfaItems = $('[typeof]');
-      const rdfaTypes = [];
+      const rdfaTypes: string[] = [];
       
       rdfaItems.each((i, element) => {
         const typeOf = $(element).attr('typeof');
@@ -414,18 +579,18 @@ class StructuredDataAnalyzer {
       breakdown = {
         microData: {
           count: microDataItems.length,
-          types: [...new Set(microDataTypes)]
+          types: Array.from(new Set(microDataTypes))
         },
         rdfa: {
           count: rdfaItems.length,
-          types: [...new Set(rdfaTypes)]
+          types: Array.from(new Set(rdfaTypes))
         }
       };
       
       // Generate readable details string
       const totalItems = microDataItems.length + rdfaItems.length;
       if (totalItems > 0) {
-        const parts = [];
+        const parts: string[] = [];
         if (microDataItems.length > 0) parts.push(`${microDataItems.length} micro-data items`);
         if (rdfaItems.length > 0) parts.push(`${rdfaItems.length} RDFa items`);
         details = `Found ${parts.join(' and ')}`;
@@ -434,9 +599,9 @@ class StructuredDataAnalyzer {
       }
       
     } catch (error) {
-      logger.error(`Micro-data analysis error: ${error.message}`);
-      details = `Micro-data analysis error: ${error.message}`;
-      breakdown = { error: error.message };
+      logger.error(`Micro-data analysis error: ${(error as Error).message}`);
+      details = `Micro-data analysis error: ${(error as Error).message}`;
+      breakdown = { error: (error as Error).message };
     }
     
     return { score, maxScore, status, details, breakdown };
@@ -444,11 +609,11 @@ class StructuredDataAnalyzer {
 
   /**
    * Validate schema completeness
-   * @param {Object} schema - Schema object to validate
-   * @param {string} schemaType - Type of schema
-   * @returns {Object} Completeness validation result
+   * @param schema - Schema object to validate
+   * @param schemaType - Type of schema
+   * @returns Completeness validation result
    */
-  validateSchemaCompleteness(schema, schemaType) {
+  validateSchemaCompleteness(schema: any, schemaType: string): CompletenessValidation {
     const required = this.requiredFields[schemaType] || [];
     const present = required.filter(field => schema[field] && schema[field] !== '');
     
@@ -465,14 +630,18 @@ class StructuredDataAnalyzer {
 
   /**
    * Analyze title tag with enhanced validation
-   * @param {string} title - Title text
-   * @returns {Object} Title analysis result
+   * @param title - Title text
+   * @returns Title analysis result
    */
-  analyzeTitleTag(title) {
+  analyzeTitleTag(title: string): TitleAnalysis {
     const maxScore = this.criteria.metaTags.title;
     let score = 0;
     let status = 'fail';
-    let details = {};
+    let details: TitleAnalysis['details'] = {
+      length: 0,
+      text: '',
+      assessment: ''
+    };
     
     if (title) {
       const length = title.length;
@@ -508,14 +677,19 @@ class StructuredDataAnalyzer {
 
   /**
    * Analyze description tag with enhanced validation
-   * @param {string} description - Description text
-   * @returns {Object} Description analysis result
+   * @param description - Description text
+   * @returns Description analysis result
    */
-  analyzeDescriptionTag(description) {
+  analyzeDescriptionTag(description: string): DescriptionAnalysis {
     const maxScore = this.criteria.metaTags.description;
     let score = 0;
     let status = 'fail';
-    let details = {};
+    let details: DescriptionAnalysis['details'] = {
+      length: 0,
+      text: '',
+      assessment: '',
+      uniqueness: 0
+    };
     
     if (description) {
       const length = description.length;
@@ -550,13 +724,17 @@ class StructuredDataAnalyzer {
 
   /**
    * Analyze technical meta tags
-   * @param {Object} $ - Cheerio instance
-   * @returns {Object} Technical meta tags analysis result
+   * @param $ - Cheerio instance
+   * @returns Technical meta tags analysis result
    */
-  analyzeTechnicalMetaTags($) {
+  analyzeTechnicalMetaTags($: cheerio.CheerioAPI): TechnicalMetaAnalysis {
     const maxScore = this.criteria.metaTags.technical;
     let score = 0;
-    let details = {};
+    let details: TechnicalMetaAnalysis['details'] = {
+      viewport: { present: false },
+      charset: { present: false },
+      robots: { present: false }
+    };
     
     // Viewport meta tag
     const viewport = $('meta[name="viewport"]').attr('content');
@@ -594,10 +772,10 @@ class StructuredDataAnalyzer {
 
   /**
    * Parse robots meta tag
-   * @param {string} robotsContent - Robots meta tag content
-   * @returns {Object} Parsed robots directives
+   * @param robotsContent - Robots meta tag content
+   * @returns Parsed robots directives
    */
-  parseRobotsMetaTag(robotsContent) {
+  parseRobotsMetaTag(robotsContent: string) {
     const directives = robotsContent.toLowerCase().split(',').map(d => d.trim());
     
     return {
@@ -611,13 +789,13 @@ class StructuredDataAnalyzer {
 
   /**
    * Validate OpenGraph image with accessibility check
-   * @param {string} ogImageUrl - OpenGraph image URL
-   * @returns {Object} Image validation result
+   * @param ogImageUrl - OpenGraph image URL
+   * @returns Image validation result
    */
-  async validateOpenGraphImage(ogImageUrl) {
+  async validateOpenGraphImage(ogImageUrl: string): Promise<ImageValidation> {
     const maxScore = this.criteria.openGraph.image;
     let score = 0;
-    let details = {
+    let details: ImageValidation['details'] = {
       present: !!ogImageUrl,
       url: ogImageUrl
     };
@@ -629,7 +807,8 @@ class StructuredDataAnalyzer {
     
     // Check cache first
     if (this.imageCache.has(ogImageUrl)) {
-      return this.imageCache.get(ogImageUrl);
+      const cached = this.imageCache.get(ogImageUrl);
+      if (cached) return cached;
     }
     
     try {
@@ -648,7 +827,7 @@ class StructuredDataAnalyzer {
         }
         
         // Check file extension
-        const extension = url.pathname.split('.').pop().toLowerCase();
+        const extension = url.pathname.split('.').pop()?.toLowerCase() || '';
         const supportedFormats = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
         
         if (supportedFormats.includes(extension)) {
@@ -666,10 +845,10 @@ class StructuredDataAnalyzer {
       }
       
     } catch (error) {
-      details.error = `Image validation failed: ${error.message}`;
+      details.error = `Image validation failed: ${(error as Error).message}`;
     }
     
-    const result = { score: Math.min(score, maxScore), maxScore, details };
+    const result: ImageValidation = { score: Math.min(score, maxScore), maxScore, details };
     
     // Cache result (with TTL simulation)
     this.imageCache.set(ogImageUrl, result);
@@ -679,19 +858,25 @@ class StructuredDataAnalyzer {
 
   /**
    * Generate smart, context-aware recommendations
-   * @param {Object} jsonLd - JSON-LD analysis result
-   * @param {Object} metaTags - Meta tags analysis result
-   * @param {Object} openGraph - OpenGraph analysis result
-   * @param {Object} microData - Micro-data analysis result
-   * @param {string} url - URL for context detection
-   * @returns {Array} Array of prioritized recommendations
+   * @param jsonLd - JSON-LD analysis result
+   * @param metaTags - Meta tags analysis result
+   * @param openGraph - OpenGraph analysis result
+   * @param microData - Micro-data analysis result
+   * @param url - URL for context detection
+   * @returns Array of prioritized recommendations
    */
-  async generateSmartRecommendations(jsonLd, metaTags, openGraph, microData, url) {
-    const recommendations = [];
+  async generateSmartRecommendations(
+    jsonLd: AnalysisResult, 
+    metaTags: AnalysisResult, 
+    openGraph: AnalysisResult, 
+    microData: AnalysisResult, 
+    url: string
+  ): Promise<string[]> {
+    const recommendations: Recommendation[] = [];
     const context = this.detectUrlContext(url);
     
     // Critical issues first
-    if (metaTags.details.title?.status === 'fail') {
+    if ((metaTags.breakdown as any)?.title?.status === 'fail') {
       recommendations.push({
         priority: 'critical',
         category: 'meta-tags',
@@ -700,7 +885,7 @@ class StructuredDataAnalyzer {
       });
     }
     
-    if (metaTags.details.description?.status === 'fail') {
+    if ((metaTags.breakdown as any)?.description?.status === 'fail') {
       recommendations.push({
         priority: 'critical',
         category: 'meta-tags',
@@ -719,7 +904,7 @@ class StructuredDataAnalyzer {
         impact: 'Improves AI search engine understanding'
       });
     } else if (jsonLd.status === 'partial') {
-      const missingSchemas = this.getMissingSchemas(jsonLd.validationDetails.validSchemas, context);
+      const missingSchemas = this.getMissingSchemas(jsonLd.validationDetails?.validSchemas || [], context);
       if (missingSchemas.length > 0) {
         recommendations.push({
           priority: 'medium',
@@ -738,7 +923,7 @@ class StructuredDataAnalyzer {
         message: '❌ Add OpenGraph tags (og:title, og:description, og:image) for social sharing',
         impact: 'Essential for social media visibility'
       });
-    } else if (!openGraph.details.image?.present) {
+    } else if (!(openGraph.breakdown as any)?.image?.details?.present) {
       recommendations.push({
         priority: 'medium',
         category: 'social',
@@ -748,7 +933,7 @@ class StructuredDataAnalyzer {
     }
     
     // Technical improvements
-    if (!metaTags.details.technical?.details.viewport?.present) {
+    if (!(metaTags.breakdown as any)?.technical?.details?.viewport?.present) {
       recommendations.push({
         priority: 'medium',
         category: 'technical',
@@ -803,10 +988,10 @@ class StructuredDataAnalyzer {
 
   /**
    * Detect URL context for smart recommendations
-   * @param {string} url - URL to analyze
-   * @returns {Object} Context information
+   * @param url - URL to analyze
+   * @returns Context information
    */
-  detectUrlContext(url) {
+  detectUrlContext(url: string): UrlContext {
     const urlLower = url.toLowerCase();
     
     // E-commerce indicators
@@ -833,10 +1018,10 @@ class StructuredDataAnalyzer {
 
   /**
    * Get contextual schema recommendation
-   * @param {Object} context - URL context
-   * @returns {string} Recommended schema type
+   * @param context - URL context
+   * @returns Recommended schema type
    */
-  getContextualSchemaRecommendation(context) {
+  getContextualSchemaRecommendation(context: UrlContext): string {
     switch (context.type) {
       case 'ecommerce':
         return 'Product/Organization';
@@ -851,12 +1036,12 @@ class StructuredDataAnalyzer {
 
   /**
    * Get missing schemas based on context
-   * @param {Array} currentSchemas - Currently detected schemas
-   * @param {Object} context - URL context
-   * @returns {Array} Missing schema recommendations
+   * @param currentSchemas - Currently detected schemas
+   * @param context - URL context
+   * @returns Missing schema recommendations
    */
-  getMissingSchemas(currentSchemas, context) {
-    const missing = [];
+  getMissingSchemas(currentSchemas: string[], context: UrlContext): string[] {
+    const missing: string[] = [];
     
     if (context.type === 'ecommerce' && !currentSchemas.includes('Product')) {
       missing.push('Product');
@@ -879,12 +1064,12 @@ class StructuredDataAnalyzer {
 
   /**
    * Get failure result for error handling
-   * @param {string} category - Category that failed
-   * @param {string} error - Error message
-   * @returns {Object} Failure result object
+   * @param category - Category that failed
+   * @param error - Error message
+   * @returns Failure result object
    */
-  getFailureResult(category, error = 'Analysis failed') {
-    const maxScores = {
+  getFailureResult(category: string, error: string = 'Analysis failed'): AnalysisResult {
+    const maxScores: Record<string, number> = {
       jsonLd: Object.values(this.criteria.jsonLd).reduce((a, b) => a + b, 0),
       metaTags: Object.values(this.criteria.metaTags).reduce((a, b) => a + b, 0),
       openGraph: Object.values(this.criteria.openGraph).reduce((a, b) => a + b, 0),
@@ -901,4 +1086,19 @@ class StructuredDataAnalyzer {
   }
 }
 
-module.exports = StructuredDataAnalyzer; 
+// Export types for external use
+export type { 
+  StructuredDataResult,
+  CriteriaWeights,
+  CompletenessValidation,
+  ValidationDetails,
+  AnalysisResult,
+  TitleAnalysis,
+  DescriptionAnalysis,
+  TechnicalMetaAnalysis,
+  ImageValidation,
+  UrlContext,
+  Recommendation
+};
+
+export default StructuredDataAnalyzer; 

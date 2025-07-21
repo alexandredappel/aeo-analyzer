@@ -295,10 +295,10 @@ npm run dev:full         # Start both frontend and backend (future)
 ## 🧪 Development
 
 ```bash
-# Test backend endpoints
-curl http://localhost:3001/api/health
-curl http://localhost:3001/api/collect-data/test?url=https://example.com
-curl -X POST http://localhost:3001/api/collect-data \
+# Test API Routes (Next.js integrated backend)
+curl http://localhost:3000/api/health
+curl "http://localhost:3000/api/collect-data?url=https://example.com"
+curl -X POST http://localhost:3000/api/collect-data \
   -H "Content-Type: application/json" \
   -d '{"url": "https://example.com"}'
 

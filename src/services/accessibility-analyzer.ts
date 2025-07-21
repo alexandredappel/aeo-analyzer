@@ -1,8 +1,249 @@
-const puppeteer = require('puppeteer');
-const cheerio = require('cheerio');
-const logger = require('../utils/logger');
+import puppeteer, { Browser, Page } from 'puppeteer';
+import * as cheerio from 'cheerio';
+import logger from '@/utils/logger';
 
-class AccessibilityAnalyzer {
+// Types and interfaces
+interface CacheEntry<T> {
+  data: T;
+  timestamp: number;
+}
+
+interface PageSpeedConfig {
+  endpoint: string;
+  apiKey?: string;
+  categories: string[];
+  strategy: string;
+  timeout: number;
+}
+
+interface PuppeteerConfig {
+  args: string[];
+  headless: boolean;
+  defaultViewport: { width: number; height: number };
+  timeout: number;
+}
+
+interface CriticalDOMCriteria {
+  contentRatio: { weight: number; thresholds: { excellent: number; good: number; poor: number } };
+  navigationAccess: { weight: number; thresholds: { excellent: number; good: number; poor: number } };
+  semanticStructure: { weight: number; thresholds: { excellent: number; good: number; poor: number } };
+}
+
+interface ContentMetrics {
+  headings: number;
+  paragraphs: number;
+  links: number;
+  images: number;
+  textContent: number;
+  formElements: number;
+  semanticElements: number;
+}
+
+interface CriticalRatio {
+  content: number;
+  navigation: number;
+  semantic: number;
+  overall: number;
+}
+
+interface AccessibilityElements {
+  altTexts: {
+    total: number;
+    withAlt: number;
+    empty: number;
+  };
+  ariaLabels: {
+    total: number;
+    buttons: number;
+    inputs: number;
+  };
+  headingStructure: HeadingStructure;
+  focusableElements: {
+    total: number;
+    withTabindex: number;
+    skipLinks: number;
+  };
+}
+
+interface HeadingStructure {
+  total: number;
+  hasH1: boolean;
+  hierarchyValid: boolean;
+  levels: number[];
+  emptyHeadings: number;
+}
+
+interface NavigationAccess {
+  static: NavigationElements;
+  rendered: NavigationElements;
+  accessibilityRatio: number;
+}
+
+interface NavigationElements {
+  mainNav: number;
+  menuLinks: number;
+  skipLinks: number;
+  breadcrumbs: number;
+  total: number;
+}
+
+interface SemanticStructure {
+  static: SemanticElements;
+  rendered: SemanticElements;
+  semanticRatio: number;
+}
+
+interface SemanticElements {
+  main: number;
+  article: number;
+  section: number;
+  nav: number;
+  aside: number;
+  header: number;
+  footer: number;
+  total: number;
+}
+
+interface CriticalDOMAnalysis {
+  staticContent: ContentMetrics;
+  renderedContent: ContentMetrics;
+  criticalRatio: CriticalRatio;
+  accessibilityElements: AccessibilityElements;
+  navigationAccess: NavigationAccess;
+  semanticStructure: SemanticStructure;
+}
+
+interface CriticalDOMResult {
+  score: number;
+  details: {
+    contentRatio: number;
+    navigationAccess: number;
+    semanticStructure: number;
+    accessibilityElements: AccessibilityElements;
+  };
+  breakdown: {
+    content: { score: number; ratio: number };
+    navigation: { score: number; ratio: number };
+    semantic: { score: number; ratio: number };
+  };
+  error?: string;
+}
+
+interface CoreWebVitals {
+  lcp: string;
+  fid: string;
+  cls: string;
+  fcp: string;
+  summary: string;
+  status?: string;
+}
+
+interface Opportunity {
+  id: string;
+  title: string;
+  description: string;
+  savings: number;
+}
+
+interface AccessibilityIssue {
+  id: string;
+  title: string;
+  description: string;
+  impact: 'high' | 'medium' | 'low';
+}
+
+interface PageSpeedResult {
+  performanceScore: number;
+  accessibilityScore: number;
+  coreWebVitals: CoreWebVitals;
+  opportunities: Opportunity[];
+  accessibilityIssues: AccessibilityIssue[];
+  error?: string;
+}
+
+interface ImageAnalysis {
+  total: number;
+  static: number;
+  dynamic: number;
+  withoutAlt: number;
+  decorative: number;
+  lazyLoaded: number;
+  issues: ImageIssue[];
+}
+
+interface ImageIssue {
+  type: 'missing-alt' | 'long-alt' | 'large-image';
+  message: string;
+  severity: 'high' | 'medium' | 'low';
+}
+
+interface ImageResult {
+  score: number;
+  details: string;
+  breakdown: {
+    total: number;
+    withAlt: number;
+    withoutAlt: number;
+    lazyLoaded: number;
+    issues: number;
+  };
+  issues: ImageIssue[];
+  error?: string;
+}
+
+interface AnalysisBreakdown {
+  criticalDOM: {
+    score: number;
+    maxScore: number;
+    status: string;
+    details: string;
+  };
+  performance: {
+    score: number;
+    maxScore: number;
+    status: string;
+    details: string;
+  };
+  images: {
+    score: number;
+    maxScore: number;
+    status: string;
+    details: string;
+  };
+}
+
+interface AccessibilityResult {
+  score: number;
+  maxScore: number;
+  breakdown: AnalysisBreakdown;
+  recommendations: string[];
+  metadata: {
+    analyzedAt: string;
+    version: string;
+    validComponents?: number;
+    totalComponents?: number;
+  };
+  error?: string;
+}
+
+interface ImageInfo {
+  src: string;
+  alt: string;
+  hasAlt: boolean;
+  isDecorative: boolean;
+  width: number;
+  height: number;
+  loading: string | null;
+}
+
+export class AccessibilityAnalyzer {
+  private browser: Browser | null;
+  private cache: Map<string, CacheEntry<AccessibilityResult>>;
+  private cacheExpiry: number;
+  private pageSpeedConfig: PageSpeedConfig;
+  private puppeteerConfig: PuppeteerConfig;
+  private criticalDOMCriteria: CriticalDOMCriteria;
+
   constructor() {
     this.browser = null;
     this.cache = new Map();
@@ -41,13 +282,13 @@ class AccessibilityAnalyzer {
     };
   }
 
-  async initializeBrowser() {
+  async initializeBrowser(): Promise<void> {
     if (!this.browser) {
       this.browser = await puppeteer.launch(this.puppeteerConfig);
     }
   }
 
-  async analyze(htmlContent, url) {
+  async analyze(htmlContent: string, url: string): Promise<AccessibilityResult> {
     const startTime = Date.now();
     logger.info(`Démarrage de l'analyse d'accessibilité pour: ${url}`);
 
@@ -63,10 +304,10 @@ class AccessibilityAnalyzer {
       // Initialize browser
       await this.initializeBrowser();
 
-      // ✅ CORRECTION : Exécution séquentielle avec gestion d'erreurs appropriée
-      let criticalDOMResult = { score: 0, error: null };
-      let pageSpeedResult = { performanceScore: 0, accessibilityScore: 0, error: null };
-      let imagesResult = { score: 0, error: null };
+      // Sequential execution with proper error handling
+      let criticalDOMResult: CriticalDOMResult = { score: 0, details: { contentRatio: 0, navigationAccess: 0, semanticStructure: 0, accessibilityElements: {} as AccessibilityElements }, breakdown: { content: { score: 0, ratio: 0 }, navigation: { score: 0, ratio: 0 }, semantic: { score: 0, ratio: 0 } } };
+      let pageSpeedResult: PageSpeedResult = { performanceScore: 0, accessibilityScore: 0, coreWebVitals: { lcp: 'N/A', fid: 'N/A', cls: 'N/A', fcp: 'N/A', summary: 'N/A', status: 'unavailable' }, opportunities: [], accessibilityIssues: [] };
+      let imagesResult: ImageResult = { score: 0, details: '', breakdown: { total: 0, withAlt: 0, withoutAlt: 0, lazyLoaded: 0, issues: 0 }, issues: [] };
 
       // Critical DOM Analysis
       try {
@@ -74,27 +315,27 @@ class AccessibilityAnalyzer {
         criticalDOMResult = await this.analyzeCriticalDOM(htmlContent, url);
         logger.info(`Critical DOM analysis completed: ${criticalDOMResult.score}/100`);
       } catch (error) {
-        logger.error(`Critical DOM analysis failed: ${error.message}`);
-        criticalDOMResult.error = error.message;
+        logger.error(`Critical DOM analysis failed: ${(error as Error).message}`);
+        criticalDOMResult.error = (error as Error).message;
       }
 
-      // PageSpeed Analysis - CORRECTION MAJEURE
+      // PageSpeed Analysis
       try {
         logger.info('Starting PageSpeed Insights analysis...');
         pageSpeedResult = await this.analyzePageSpeedInsights(url);
         logger.info(`PageSpeed analysis completed: Performance=${pageSpeedResult.performanceScore}/100, Accessibility=${pageSpeedResult.accessibilityScore}/100`);
         
-        // ✅ Vérifier si l'API a vraiment réussi
+        // Check if API actually succeeded
         if (pageSpeedResult.error) {
           throw new Error(pageSpeedResult.error);
         }
       } catch (error) {
-        logger.error(`PageSpeed analysis failed: ${error.message}`);
+        logger.error(`PageSpeed analysis failed: ${(error as Error).message}`);
         pageSpeedResult = { 
           performanceScore: 0, 
           accessibilityScore: 0, 
-          error: error.message,
-          coreWebVitals: { status: 'unavailable' },
+          error: (error as Error).message,
+          coreWebVitals: { lcp: 'N/A', fid: 'N/A', cls: 'N/A', fcp: 'N/A', summary: 'N/A', status: 'unavailable' },
           opportunities: [],
           accessibilityIssues: []
         };
@@ -106,8 +347,8 @@ class AccessibilityAnalyzer {
         imagesResult = await this.analyzeImages(htmlContent, url);
         logger.info(`Images analysis completed: ${imagesResult.score}/100`);
       } catch (error) {
-        logger.error(`Images analysis failed: ${error.message}`);
-        imagesResult.error = error.message;
+        logger.error(`Images analysis failed: ${(error as Error).message}`);
+        imagesResult.error = (error as Error).message;
       }
 
       // Combine results with proper error handling
@@ -129,13 +370,13 @@ class AccessibilityAnalyzer {
       return combinedAnalysis;
 
     } catch (error) {
-      logger.error(`Échec critique de l'analyse d'accessibilité: ${error.message}`);
-      return this.getErrorFallback(error.message);
+      logger.error(`Échec critique de l'analyse d'accessibilité: ${(error as Error).message}`);
+      return this.getErrorFallback((error as Error).message);
     }
   }
 
-  // ✅ CORRECTION : Fetch avec timeout proper pour Node.js
-  async analyzePageSpeedInsights(url) {
+  // Fetch with timeout for Node.js
+  async analyzePageSpeedInsights(url: string): Promise<PageSpeedResult> {
     const apiKey = this.pageSpeedConfig.apiKey;
     if (!apiKey) {
       throw new Error('GOOGLE_PAGESPEED_API_KEY non configurée');
@@ -150,7 +391,7 @@ class AccessibilityAnalyzer {
       
       logger.info(`Calling PageSpeed API: ${apiUrl.replace(/key=[^&]+/, 'key=***')}`);
       
-      // ✅ CORRECTION : Proper fetch with AbortController
+      // Proper fetch with AbortController
       const response = await fetch(apiUrl, {
         signal: controller.signal,
         headers: {
@@ -168,7 +409,7 @@ class AccessibilityAnalyzer {
 
       const data = await response.json();
       
-      // ✅ Validation de la réponse
+      // Response validation
       if (!data.lighthouseResult) {
         throw new Error('Invalid PageSpeed API response - missing lighthouseResult');
       }
@@ -183,26 +424,25 @@ class AccessibilityAnalyzer {
         accessibilityScore,
         coreWebVitals: this.extractCoreWebVitals(data),
         opportunities: this.extractOpportunities(data),
-        accessibilityIssues: this.extractAccessibilityIssues(data),
-        error: null // ✅ Explicitly set no error
+        accessibilityIssues: this.extractAccessibilityIssues(data)
       };
 
     } catch (error) {
       clearTimeout(timeoutId);
       
-      if (error.name === 'AbortError') {
+      if ((error as any).name === 'AbortError') {
         const timeoutError = `PageSpeed API timeout après ${this.pageSpeedConfig.timeout}ms`;
         logger.error(timeoutError);
         throw new Error(timeoutError);
       }
       
-      logger.error(`Erreur PageSpeed Insights: ${error.message}`);
-      throw error; // ✅ Propager l'erreur au lieu de retourner un objet
+      logger.error(`Erreur PageSpeed Insights: ${(error as Error).message}`);
+      throw error;
     }
   }
 
-  // ✅ CORRECTION : Fonction combineResults avec validation appropriée
-  combineResults(criticalDOMResult, pageSpeedResult, imagesResult) {
+  // Combine results with proper validation
+  combineResults(criticalDOMResult: CriticalDOMResult, pageSpeedResult: PageSpeedResult, imagesResult: ImageResult): AccessibilityResult {
     // Extract scores with proper fallbacks
     const criticalDOMScore = criticalDOMResult?.score || 0;
     const performanceScore = pageSpeedResult?.performanceScore || 0;
@@ -211,7 +451,7 @@ class AccessibilityAnalyzer {
     // Log individual scores for debugging
     logger.info(`Combining scores - Critical DOM: ${criticalDOMScore}, Performance: ${performanceScore}, Images: ${imagesScore}`);
 
-    // ✅ CORRECTION : Pondération avec vérification des erreurs
+    // Weight calculation with error verification
     let totalScore = 0;
     let validComponents = 0;
     let weightSum = 0;
@@ -279,8 +519,9 @@ class AccessibilityAnalyzer {
     };
   }
 
-  // Les autres méthodes restent identiques...
-  async analyzeCriticalDOM(staticHTML, url) {
+  async analyzeCriticalDOM(staticHTML: string, url: string): Promise<CriticalDOMResult> {
+    if (!this.browser) throw new Error('Browser not initialized');
+    
     const page = await this.browser.newPage();
     
     try {
@@ -306,7 +547,7 @@ class AccessibilityAnalyzer {
       const staticDOM = cheerio.load(staticHTML);
       const renderedDOM = cheerio.load(renderedHTML);
       
-      const analysis = {
+      const analysis: CriticalDOMAnalysis = {
         staticContent: this.extractContentMetrics(staticDOM),
         renderedContent: this.extractContentMetrics(renderedDOM),
         criticalRatio: this.calculateCriticalRatio(staticDOM, renderedDOM),
@@ -322,7 +563,7 @@ class AccessibilityAnalyzer {
     }
   }
 
-  extractContentMetrics(dom) {
+  extractContentMetrics(dom: cheerio.CheerioAPI): ContentMetrics {
     return {
       headings: dom('h1, h2, h3, h4, h5, h6').length,
       paragraphs: dom('p').length,
@@ -334,7 +575,7 @@ class AccessibilityAnalyzer {
     };
   }
 
-  calculateCriticalRatio(staticDOM, renderedDOM) {
+  calculateCriticalRatio(staticDOM: cheerio.CheerioAPI, renderedDOM: cheerio.CheerioAPI): CriticalRatio {
     const staticMetrics = this.extractContentMetrics(staticDOM);
     const renderedMetrics = this.extractContentMetrics(renderedDOM);
 
@@ -359,7 +600,7 @@ class AccessibilityAnalyzer {
     };
   }
 
-  analyzeAccessibilityElements(dom) {
+  analyzeAccessibilityElements(dom: cheerio.CheerioAPI): AccessibilityElements {
     return {
       altTexts: {
         total: dom('img').length,
@@ -380,8 +621,8 @@ class AccessibilityAnalyzer {
     };
   }
 
-  analyzeHeadingStructure(dom) {
-    const headings = [];
+  analyzeHeadingStructure(dom: cheerio.CheerioAPI): HeadingStructure {
+    const headings: { level: number; text: string }[] = [];
     dom('h1, h2, h3, h4, h5, h6').each((i, el) => {
       const level = parseInt(el.tagName.substring(1));
       headings.push({ level, text: dom(el).text().trim() });
@@ -408,7 +649,7 @@ class AccessibilityAnalyzer {
     };
   }
 
-  analyzeNavigationAccess(staticDOM, renderedDOM) {
+  analyzeNavigationAccess(staticDOM: cheerio.CheerioAPI, renderedDOM: cheerio.CheerioAPI): NavigationAccess {
     const staticNav = this.extractNavigationElements(staticDOM);
     const renderedNav = this.extractNavigationElements(renderedDOM);
 
@@ -419,7 +660,7 @@ class AccessibilityAnalyzer {
     };
   }
 
-  extractNavigationElements(dom) {
+  extractNavigationElements(dom: cheerio.CheerioAPI): NavigationElements {
     return {
       mainNav: dom('nav').length,
       menuLinks: dom('nav a, [role="navigation"] a').length,
@@ -429,7 +670,7 @@ class AccessibilityAnalyzer {
     };
   }
 
-  analyzeSemanticStructure(staticDOM, renderedDOM) {
+  analyzeSemanticStructure(staticDOM: cheerio.CheerioAPI, renderedDOM: cheerio.CheerioAPI): SemanticStructure {
     const staticSemantic = this.extractSemanticElements(staticDOM);
     const renderedSemantic = this.extractSemanticElements(renderedDOM);
 
@@ -440,7 +681,7 @@ class AccessibilityAnalyzer {
     };
   }
 
-  extractSemanticElements(dom) {
+  extractSemanticElements(dom: cheerio.CheerioAPI): SemanticElements {
     return {
       main: dom('main').length,
       article: dom('article').length,
@@ -453,7 +694,7 @@ class AccessibilityAnalyzer {
     };
   }
 
-  scoreCriticalDOM(analysis) {
+  scoreCriticalDOM(analysis: CriticalDOMAnalysis): CriticalDOMResult {
     const contentScore = this.getThresholdScore(
       analysis.criticalRatio.content, 
       this.criticalDOMCriteria.contentRatio.thresholds
@@ -491,7 +732,7 @@ class AccessibilityAnalyzer {
     };
   }
 
-  extractCoreWebVitals(data) {
+  extractCoreWebVitals(data: any): CoreWebVitals {
     const audits = data.lighthouseResult?.audits || {};
     
     return {
@@ -504,9 +745,9 @@ class AccessibilityAnalyzer {
     };
   }
 
-  extractOpportunities(data) {
+  extractOpportunities(data: any): Opportunity[] {
     const audits = data.lighthouseResult?.audits || {};
-    const opportunities = [];
+    const opportunities: Opportunity[] = [];
 
     const opportunityAudits = [
       'render-blocking-resources',
@@ -531,9 +772,9 @@ class AccessibilityAnalyzer {
     return opportunities;
   }
 
-  extractAccessibilityIssues(data) {
+  extractAccessibilityIssues(data: any): AccessibilityIssue[] {
     const audits = data.lighthouseResult?.audits || {};
-    const issues = [];
+    const issues: AccessibilityIssue[] = [];
 
     const accessibilityAudits = [
       'image-alt',
@@ -559,14 +800,16 @@ class AccessibilityAnalyzer {
     return issues;
   }
 
-  async analyzeImages(staticHTML, url) {
+  async analyzeImages(staticHTML: string, url: string): Promise<ImageResult> {
+    if (!this.browser) throw new Error('Browser not initialized');
+    
     const page = await this.browser.newPage();
     
     try {
       await page.goto(url, { waitUntil: 'networkidle0', timeout: 30000 });
 
       // Get all images (static + dynamic)
-      const allImages = await page.evaluate(() => {
+      const allImages: ImageInfo[] = await page.evaluate(() => {
         return Array.from(document.querySelectorAll('img')).map(img => ({
           src: img.src,
           alt: img.alt,
@@ -582,7 +825,7 @@ class AccessibilityAnalyzer {
       const staticDOM = cheerio.load(staticHTML);
       const staticImages = staticDOM('img').length;
 
-      const analysis = {
+      const analysis: ImageAnalysis = {
         total: allImages.length,
         static: staticImages,
         dynamic: allImages.length - staticImages,
@@ -599,8 +842,8 @@ class AccessibilityAnalyzer {
     }
   }
 
-  identifyImageIssues(images) {
-    const issues = [];
+  identifyImageIssues(images: ImageInfo[]): ImageIssue[] {
+    const issues: ImageIssue[] = [];
 
     images.forEach((img, index) => {
       if (!img.hasAlt && !img.isDecorative) {
@@ -631,7 +874,7 @@ class AccessibilityAnalyzer {
     return issues;
   }
 
-  scoreImages(analysis) {
+  scoreImages(analysis: ImageAnalysis): ImageResult {
     let score = 100;
 
     // Penalize missing alt texts
@@ -660,21 +903,21 @@ class AccessibilityAnalyzer {
     };
   }
 
-  getThresholdScore(value, thresholds) {
+  getThresholdScore(value: number, thresholds: { excellent: number; good: number; poor: number }): number {
     if (value >= thresholds.excellent) return 100;
     if (value >= thresholds.good) return 75;
     if (value >= thresholds.poor) return 50;
     return 25;
   }
 
-  getScoreStatus(score) {
+  getScoreStatus(score: number): string {
     if (score >= 80) return 'pass';
     if (score >= 60) return 'partial';
     return 'fail';
   }
 
-  generateRecommendations(criticalDOM, pageSpeed, images) {
-    const recommendations = [];
+  generateRecommendations(criticalDOM: CriticalDOMResult, pageSpeed: PageSpeedResult, images: ImageResult): string[] {
+    const recommendations: string[] = [];
     
     if (!criticalDOM?.error && criticalDOM?.score < 70) {
       recommendations.push('🚨 Le contenu critique est faible - assurez-vous que le contenu important soit accessible sans JavaScript');
@@ -694,7 +937,7 @@ class AccessibilityAnalyzer {
       recommendations.push('🖼️ Ajoutez du texte alternatif aux images pour une meilleure accessibilité');
     }
 
-    // Recommandations positives
+    // Positive recommendations
     if (!criticalDOM?.error && criticalDOM?.score >= 80) {
       recommendations.push('✅ Excellent ratio de contenu critique accessible sans JavaScript');
     }
@@ -710,7 +953,7 @@ class AccessibilityAnalyzer {
     return recommendations;
   }
 
-  getErrorFallback(errorMessage) {
+  getErrorFallback(errorMessage: string): AccessibilityResult {
     return {
       score: 0,
       maxScore: 100,
@@ -746,7 +989,7 @@ class AccessibilityAnalyzer {
     };
   }
 
-  async cleanup() {
+  async cleanup(): Promise<void> {
     if (this.browser) {
       await this.browser.close();
       this.browser = null;
@@ -755,4 +998,18 @@ class AccessibilityAnalyzer {
   }
 }
 
-module.exports = AccessibilityAnalyzer;
+// Export types for external use
+export type {
+  AccessibilityResult,
+  AnalysisBreakdown,
+  CriticalDOMResult,
+  PageSpeedResult,
+  ImageResult,
+  AccessibilityElements,
+  CoreWebVitals,
+  Opportunity,
+  AccessibilityIssue,
+  ImageIssue
+};
+
+export default AccessibilityAnalyzer; 
