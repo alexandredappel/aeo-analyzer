@@ -9,8 +9,58 @@
  * - Sitemap Present: 20 points
  */
 
+// Types and interfaces
+interface AnalysisResult {
+  score: number;
+  status: 'pass' | 'partial' | 'fail';
+  message: string;
+}
+
+interface RobotRules {
+  [userAgent: string]: {
+    allows: string[];
+    disallows: string[];
+  };
+}
+
+interface CollectedData {
+  url: string;
+  html?: {
+    success: boolean;
+    error?: string;
+    metadata?: {
+      statusCode?: number;
+    };
+  };
+  robotsTxt?: {
+    success: boolean;
+    data?: string;
+    error?: string;
+  };
+  sitemap?: {
+    success: boolean;
+    error?: string;
+  };
+}
+
+interface DiscoverabilityBreakdown {
+  https: AnalysisResult;
+  httpStatus: AnalysisResult;
+  robotsAiBots: AnalysisResult;
+  sitemap: AnalysisResult;
+}
+
+interface DiscoverabilityResult {
+  category: string;
+  score: number;
+  maxScore: number;
+  breakdown: DiscoverabilityBreakdown;
+  recommendations: string[];
+  error?: string;
+}
+
 // AI bots to check in robots.txt
-const AI_BOTS = [
+const AI_BOTS: string[] = [
   'GPTBot',
   'Google-Extended', 
   'ChatGPT-User',
@@ -22,10 +72,10 @@ const AI_BOTS = [
 
 /**
  * Analyzes HTTPS protocol usage
- * @param {string} url - The website URL
- * @returns {Object} Analysis result with score and details
+ * @param url - The website URL
+ * @returns Analysis result with score and details
  */
-function analyzeHttps(url) {
+function analyzeHttps(url: string): AnalysisResult {
   try {
     const urlObj = new URL(url);
     const isHttps = urlObj.protocol === 'https:';
@@ -46,16 +96,16 @@ function analyzeHttps(url) {
 
 /**
  * Analyzes HTTP status code
- * @param {Object} htmlData - HTML collection data with metadata
- * @returns {Object} Analysis result with score and details
+ * @param htmlData - HTML collection data with metadata
+ * @returns Analysis result with score and details
  */
-function analyzeHttpStatus(htmlData) {
+function analyzeHttpStatus(htmlData: CollectedData['html']): AnalysisResult {
   try {
-    if (!htmlData.success) {
+    if (!htmlData?.success) {
       return {
         score: 0,
         status: 'fail',
-        message: `HTTP error: ${htmlData.error || 'Unknown error'}`
+        message: `HTTP error: ${htmlData?.error || 'Unknown error'}`
       };
     }
     
@@ -78,14 +128,14 @@ function analyzeHttpStatus(htmlData) {
 
 /**
  * Parses robots.txt content to extract rules for specific user agents
- * @param {string} robotsContent - Raw robots.txt content
- * @returns {Object} Parsed rules by user agent
+ * @param robotsContent - Raw robots.txt content
+ * @returns Parsed rules by user agent
  */
-function parseRobotsTxt(robotsContent) {
-  const rules = {};
+function parseRobotsTxt(robotsContent: string): RobotRules {
+  const rules: RobotRules = {};
   const lines = robotsContent.split('\n').map(line => line.trim());
   
-  let currentUserAgent = null;
+  let currentUserAgent: string | null = null;
   
   for (const line of lines) {
     if (line.startsWith('#') || line === '') continue;
@@ -109,11 +159,11 @@ function parseRobotsTxt(robotsContent) {
 
 /**
  * Checks if a specific bot is allowed based on robots.txt rules
- * @param {Object} rules - Parsed robots.txt rules
- * @param {string} botName - Name of the bot to check
- * @returns {boolean} True if bot is allowed
+ * @param rules - Parsed robots.txt rules
+ * @param botName - Name of the bot to check
+ * @returns True if bot is allowed
  */
-function isBotAllowed(rules, botName) {
+function isBotAllowed(rules: RobotRules, botName: string): boolean {
   const botNameLower = botName.toLowerCase();
   
   // Check specific bot rules first
@@ -140,13 +190,13 @@ function isBotAllowed(rules, botName) {
 
 /**
  * Analyzes robots.txt for AI bot accessibility
- * @param {Object} robotsData - Robots.txt collection data
- * @returns {Object} Analysis result with score and details
+ * @param robotsData - Robots.txt collection data
+ * @returns Analysis result with score and details
  */
-function analyzeRobotsAiBots(robotsData) {
+function analyzeRobotsAiBots(robotsData: CollectedData['robotsTxt']): AnalysisResult {
   try {
     // If robots.txt is missing
-    if (!robotsData.success) {
+    if (!robotsData?.success) {
       return {
         score: 0,
         status: 'fail',
@@ -167,7 +217,7 @@ function analyzeRobotsAiBots(robotsData) {
     
     const rules = parseRobotsTxt(robotsContent);
     let allowedBots = 0;
-    let blockedBots = [];
+    let blockedBots: string[] = [];
     
     // Check each AI bot
     for (const bot of AI_BOTS) {
@@ -181,7 +231,9 @@ function analyzeRobotsAiBots(robotsData) {
     const allowedPercentage = allowedBots / AI_BOTS.length;
     const score = Math.round(30 * allowedPercentage);
     
-    let status, message;
+    let status: 'pass' | 'partial' | 'fail';
+    let message: string;
+    
     if (allowedBots === AI_BOTS.length) {
       status = 'pass';
       message = 'All AI bots allowed in robots.txt';
@@ -206,12 +258,12 @@ function analyzeRobotsAiBots(robotsData) {
 
 /**
  * Analyzes sitemap presence
- * @param {Object} sitemapData - Sitemap collection data
- * @returns {Object} Analysis result with score and details
+ * @param sitemapData - Sitemap collection data
+ * @returns Analysis result with score and details
  */
-function analyzeSitemap(sitemapData) {
+function analyzeSitemap(sitemapData: CollectedData['sitemap']): AnalysisResult {
   try {
-    if (sitemapData.success) {
+    if (sitemapData?.success) {
       return {
         score: 20,
         status: 'pass',
@@ -235,11 +287,11 @@ function analyzeSitemap(sitemapData) {
 
 /**
  * Generates recommendations based on analysis results
- * @param {Object} breakdown - Analysis breakdown by category
- * @returns {Array} Array of recommendation strings
+ * @param breakdown - Analysis breakdown by category
+ * @returns Array of recommendation strings
  */
-function generateRecommendations(breakdown) {
-  const recommendations = [];
+function generateRecommendations(breakdown: DiscoverabilityBreakdown): string[] {
+  const recommendations: string[] = [];
   
   // HTTPS recommendations
   if (breakdown.https.status === 'pass') {
@@ -276,10 +328,10 @@ function generateRecommendations(breakdown) {
 
 /**
  * Main discoverability analysis function
- * @param {Object} collectedData - Data collected from crawler service
- * @returns {Object} Complete discoverability analysis with score and recommendations
+ * @param collectedData - Data collected from crawler service
+ * @returns Complete discoverability analysis with score and recommendations
  */
-function analyzeDiscoverability(collectedData) {
+export function analyzeDiscoverability(collectedData: CollectedData): DiscoverabilityResult {
   try {
     // Validate input
     if (!collectedData || typeof collectedData !== 'object') {
@@ -294,16 +346,16 @@ function analyzeDiscoverability(collectedData) {
     
     // Perform individual analyses
     const httpsAnalysis = analyzeHttps(url);
-    const httpStatusAnalysis = analyzeHttpStatus(html || {});
-    const robotsAnalysis = analyzeRobotsAiBots(robotsTxt || {});
-    const sitemapAnalysis = analyzeSitemap(sitemap || {});
+    const httpStatusAnalysis = analyzeHttpStatus(html);
+    const robotsAnalysis = analyzeRobotsAiBots(robotsTxt);
+    const sitemapAnalysis = analyzeSitemap(sitemap);
     
     // Calculate total score
     const totalScore = httpsAnalysis.score + httpStatusAnalysis.score + 
                       robotsAnalysis.score + sitemapAnalysis.score;
     
     // Build breakdown
-    const breakdown = {
+    const breakdown: DiscoverabilityBreakdown = {
       https: httpsAnalysis,
       httpStatus: httpStatusAnalysis,
       robotsAiBots: robotsAnalysis,
@@ -333,60 +385,28 @@ function analyzeDiscoverability(collectedData) {
         robotsAiBots: { score: 0, status: 'fail', message: 'Analysis error' },
         sitemap: { score: 0, status: 'fail', message: 'Analysis error' }
       },
-      recommendations: [`❌ Analysis failed: ${error.message}`],
-      error: error.message
+      recommendations: [`❌ Analysis failed: ${(error as Error).message}`],
+      error: (error as Error).message
     };
   }
 }
 
-module.exports = {
-  analyzeDiscoverability,
-  // Export helper functions for testing
+// Export helper functions for testing and external use
+export {
   analyzeHttps,
   analyzeHttpStatus,
   analyzeRobotsAiBots,
   analyzeSitemap,
   parseRobotsTxt,
-  isBotAllowed
+  isBotAllowed,
+  AI_BOTS
 };
 
-// ===== TESTING SECTION =====
-// Uncomment to test this analyzer independently
-
-/*
-// Test Case 1: HTTPS site with no robots.txt
-const testCase1 = {
-  url: 'https://example.com',
-  html: { success: true, metadata: { statusCode: 200 } },
-  robotsTxt: { success: false, error: 'Not found' },
-  sitemap: { success: false, error: 'Not found' }
-};
-
-console.log('=== Test Case 1: HTTPS + No robots.txt ===');
-console.log(JSON.stringify(analyzeDiscoverability(testCase1), null, 2));
-console.log('Expected score: 50/100 (HTTPS: 25 + HTTP Status: 25)');
-
-// Test Case 2: HTTP site with permissive robots.txt
-const testCase2 = {
-  url: 'http://example.com',
-  html: { success: true, metadata: { statusCode: 200 } },
-  robotsTxt: { success: true, data: 'User-agent: *\nDisallow:' },
-  sitemap: { success: true }
-};
-
-console.log('\n=== Test Case 2: HTTP + Good robots.txt + Sitemap ===');
-console.log(JSON.stringify(analyzeDiscoverability(testCase2), null, 2));
-console.log('Expected score: 75/100 (HTTP Status: 25 + Robots: 30 + Sitemap: 20)');
-
-// Test Case 3: HTTPS site with restrictive robots.txt
-const testCase3 = {
-  url: 'https://example.com',
-  html: { success: true, metadata: { statusCode: 200 } },
-  robotsTxt: { success: true, data: 'User-agent: *\nDisallow: /\n\nUser-agent: GPTBot\nDisallow: /' },
-  sitemap: { success: true }
-};
-
-console.log('\n=== Test Case 3: HTTPS + Restrictive robots.txt + Sitemap ===');
-console.log(JSON.stringify(analyzeDiscoverability(testCase3), null, 2));
-console.log('Expected score: 70/100 (HTTPS: 25 + HTTP Status: 25 + Sitemap: 20)');
-*/ 
+// Export types for external use
+export type {
+  DiscoverabilityResult,
+  DiscoverabilityBreakdown,
+  AnalysisResult,
+  CollectedData,
+  RobotRules
+}; 

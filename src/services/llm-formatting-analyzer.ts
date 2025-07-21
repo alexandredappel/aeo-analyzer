@@ -4,10 +4,238 @@
  * Evaluates heading hierarchy, semantic HTML5, structured content, and navigation
  */
 
-const cheerio = require('cheerio');
-const logger = require('../utils/logger');
+import * as cheerio from 'cheerio';
+import logger from '@/utils/logger';
 
-class LLMFormattingAnalyzer {
+// Types and interfaces
+interface CriteriaWeights {
+  headingStructure: {
+    hierarchy: number;
+    quality: number;
+    semanticValue: number;
+  };
+  semanticElements: {
+    structure: number;
+    accessibility: number;
+    contentFlow: number;
+  };
+  contentOrganization: {
+    readability: number;
+    structure: number;
+    density: number;
+  };
+  linkQuality: {
+    internal: number;
+    external: number;
+    context: number;
+  };
+}
+
+interface ContentTypePattern {
+  selectors: string[];
+  patterns: string[];
+  weight: number;
+}
+
+interface ContentTypePatterns {
+  article: ContentTypePattern;
+  product: ContentTypePattern;
+  documentation: ContentTypePattern;
+  corporate: ContentTypePattern;
+}
+
+interface AdvancedCache {
+  contentAnalysis: Map<string, CacheEntry>;
+  readabilityMetrics: Map<string, CacheEntry>;
+  accessibilityScores: Map<string, CacheEntry>;
+  linkAnalysis: Map<string, CacheEntry>;
+}
+
+interface CacheEntry {
+  data: any;
+  timestamp: number;
+}
+
+interface CacheConfig {
+  defaultTTL: number;
+  maxSize: number;
+  checkPeriod: number;
+}
+
+interface PriorityWeight {
+  critical: number;
+  high: number;
+  medium: number;
+  low: number;
+}
+
+interface ContentType {
+  primary: string;
+  confidence: number;
+  alternatives: Array<{ type: string; confidence: number }>;
+}
+
+interface HeadingStructure {
+  h1: number;
+  h2: number;
+  h3: number;
+  h4: number;
+  h5: number;
+  h6: number;
+}
+
+interface HierarchyAnalysis {
+  hasH1: boolean;
+  multipleH1: boolean;
+  logicalOrder: boolean;
+  skipLevels: string[];
+  maxDepth: number;
+  sequence: number[];
+}
+
+interface HeadingContentAnalysis {
+  total: number;
+  emptyHeadings: number;
+  tooShort: number;
+  averageLength: number;
+}
+
+interface AnalysisResult {
+  score: number;
+  maxScore: number;
+  status: string;
+  details: string;
+  breakdown: any;
+}
+
+interface HeadingContentAdvanced {
+  total: number;
+  averageLength: number;
+  descriptiveness: number;
+  duplicates: number;
+  keywordStuffing: boolean;
+}
+
+interface HeadingSemanticValue {
+  informationScent: number;
+  navigationValue: number;
+  expectedTermsFound: number;
+  contentTypeAlignment: number;
+}
+
+interface SemanticStructureAnalysis {
+  structural: Record<string, number>;
+  content: Record<string, number>;
+  semanticCount: number;
+  totalElements: number;
+  semanticRatio: number;
+}
+
+interface AccessibilityFeatures {
+  score: number;
+  features: {
+    ariaLabels: number;
+    ariaDescribedBy: number;
+    altTexts: number;
+    totalImages: number;
+    skipLinks: number;
+    headingStructure: boolean;
+  };
+}
+
+interface ContentFlow {
+  logicalFlow: number;
+  hasMain: boolean;
+  hasHeader: boolean;
+  hasFooter: boolean;
+  hasNav: boolean;
+  articleStructure: boolean;
+  sectionHierarchy: boolean;
+}
+
+interface StructureAnalysis {
+  score: number;
+  paragraphCount: number;
+  averageParagraphLength: number;
+  wellStructuredParagraphs: number;
+}
+
+interface ReadabilityAnalysis {
+  score: number;
+  level: string;
+  complexity: number;
+  wordCount: number;
+  sentenceCount: number;
+}
+
+interface DensityAnalysis {
+  textLength: number;
+  htmlLength: number;
+  ratio: number;
+  score: number;
+}
+
+interface LinkAnalysis {
+  internal: { count: number; descriptive: number; contextual: number };
+  external: { count: number; descriptive: number; authority: number };
+  context: { total: number; descriptive: number; generic: number };
+}
+
+interface AccessibilityValidation {
+  wcagCompliance: number;
+  issues: string[];
+  warnings: string[];
+  screenReaderFriendly: boolean;
+}
+
+interface LLMOptimization {
+  llmOptimizationScore: number;
+  llmSpecificIssues: string[];
+  optimizationSuggestions: string[];
+}
+
+interface Recommendation {
+  priority: 'critical' | 'high' | 'medium' | 'low';
+  category: string;
+  issue: string;
+  action: string;
+  impact: string;
+  effort?: string;
+}
+
+interface ValidationResult {
+  valid: boolean;
+  issues: string[];
+  warnings: string[];
+}
+
+interface LLMFormattingResult {
+  score: number;
+  maxScore: number;
+  breakdown: {
+    headingStructure: AnalysisResult;
+    semanticElements: AnalysisResult;
+    structuredContent: AnalysisResult;
+    citationsReferences: AnalysisResult;
+  };
+  recommendations: string[];
+  validation: ValidationResult;
+  metadata: {
+    analyzedAt: string;
+    version: string;
+    features: string[];
+  };
+  error?: string;
+}
+
+export class LLMFormattingAnalyzer {
+  private maxScore: number;
+  private criteria: CriteriaWeights;
+  private advancedCache: AdvancedCache;
+  private cacheConfig: CacheConfig;
+  private contentTypePatterns: ContentTypePatterns;
+  private priorityWeight: PriorityWeight;
+
   constructor() {
     this.maxScore = 100;
     
@@ -80,11 +308,11 @@ class LLMFormattingAnalyzer {
 
   /**
    * Advanced analysis method for LLM-friendly formatting
-   * @param {string} htmlContent - HTML content to analyze
-   * @param {string} url - URL being analyzed
-   * @returns {Object} Analysis results with scoring and recommendations
+   * @param htmlContent - HTML content to analyze
+   * @param url - URL being analyzed
+   * @returns Analysis results with scoring and recommendations
    */
-  async analyze(htmlContent, url) {
+  async analyze(htmlContent: string, url: string): Promise<LLMFormattingResult> {
     logger.info('Starting advanced LLM-friendly formatting analysis...');
     
     try {
@@ -96,7 +324,7 @@ class LLMFormattingAnalyzer {
       const cacheKey = `llm-advanced:${url}`;
       if (this.advancedCache.contentAnalysis.has(cacheKey)) {
         const cached = this.advancedCache.contentAnalysis.get(cacheKey);
-        if (Date.now() - cached.timestamp < this.cacheConfig.defaultTTL) {
+        if (cached && Date.now() - cached.timestamp < this.cacheConfig.defaultTTL) {
           logger.info('Returning cached advanced LLM formatting analysis');
           return cached.data;
         }
@@ -140,7 +368,7 @@ class LLMFormattingAnalyzer {
       );
       
       // Create validation object
-      const validation = {
+      const validation: ValidationResult = {
         valid: totalScore > 0,
         issues: [],
         warnings: []
@@ -160,7 +388,7 @@ class LLMFormattingAnalyzer {
         validation.warnings.push('Link quality could be enhanced');
       }
       
-      const result = {
+      const result: LLMFormattingResult = {
         score: totalScore,
         maxScore: this.maxScore,
         breakdown: {
@@ -188,125 +416,40 @@ class LLMFormattingAnalyzer {
       return result;
       
     } catch (error) {
-      logger.error(`LLM formatting analysis failed: ${error.message}`);
+      logger.error(`LLM formatting analysis failed: ${(error as Error).message}`);
       
       return {
         score: 0,
         maxScore: this.maxScore,
         breakdown: {
-          headingStructure: this.getFailureResult('headingStructure', error.message),
-          semanticElements: this.getFailureResult('semanticElements', error.message),
-          structuredContent: this.getFailureResult('contentOrganization', error.message),
-          citationsReferences: this.getFailureResult('linkQuality', error.message)
+          headingStructure: this.getFailureResult('headingStructure', (error as Error).message),
+          semanticElements: this.getFailureResult('semanticElements', (error as Error).message),
+          structuredContent: this.getFailureResult('contentOrganization', (error as Error).message),
+          citationsReferences: this.getFailureResult('linkQuality', (error as Error).message)
         },
-        recommendations: [`❌ LLM formatting analysis failed: ${error.message}`],
-        validation: { valid: false, issues: [error.message], warnings: [] }
+        recommendations: [`❌ LLM formatting analysis failed: ${(error as Error).message}`],
+        validation: { valid: false, issues: [(error as Error).message], warnings: [] },
+        metadata: {
+          analyzedAt: new Date().toISOString(),
+          version: '1.0',
+          features: ['error-recovery']
+        },
+        error: (error as Error).message
       };
     }
-  }
-
-  /**
-   * Analyze heading hierarchy structure (H1-H6)
-   * @param {Object} $ - Cheerio instance
-   * @returns {Object} Heading analysis result
-   */
-  analyzeHeadingStructure($) {
-    const maxScore = Object.values(this.criteria.headingStructure).reduce((a, b) => a + b, 0);
-    let score = 0;
-    let status = 'fail';
-    let details = '';
-    let breakdown = {};
-    
-    try {
-      // Count all heading elements
-      const headings = {
-        h1: $('h1').length,
-        h2: $('h2').length,
-        h3: $('h3').length,
-        h4: $('h4').length,
-        h5: $('h5').length,
-        h6: $('h6').length
-      };
-      
-      const totalHeadings = Object.values(headings).reduce((a, b) => a + b, 0);
-      breakdown.structure = headings;
-      
-      if (totalHeadings === 0) {
-        details = 'No heading elements found';
-        breakdown.issues = ['No heading structure'];
-        return { score, maxScore, status, details, breakdown };
-      }
-      
-      // Analyze hierarchy quality
-      const hierarchyAnalysis = this.validateHeadingHierarchy($);
-      breakdown.hierarchy = hierarchyAnalysis;
-      
-      // Single H1 scoring (5 points)
-      if (headings.h1 === 1) {
-        score += this.criteria.headingStructure.singleH1;
-        breakdown.singleH1 = { pass: true, count: 1 };
-      } else if (headings.h1 === 0) {
-        breakdown.singleH1 = { pass: false, count: 0, issue: 'Missing H1' };
-      } else {
-        breakdown.singleH1 = { pass: false, count: headings.h1, issue: 'Multiple H1 tags' };
-      }
-      
-      // Hierarchy scoring (20 points)
-      if (hierarchyAnalysis.logicalOrder && hierarchyAnalysis.skipLevels.length === 0) {
-        score += this.criteria.headingStructure.hierarchy;
-        breakdown.hierarchyScore = 'excellent';
-      } else if (hierarchyAnalysis.logicalOrder) {
-        score += this.criteria.headingStructure.hierarchy * 0.7;
-        breakdown.hierarchyScore = 'good';
-      } else {
-        score += this.criteria.headingStructure.hierarchy * 0.3;
-        breakdown.hierarchyScore = 'poor';
-      }
-      
-      // Content quality scoring (10 points)
-      const contentAnalysis = this.analyzeHeadingContent($);
-      breakdown.content = contentAnalysis;
-      
-      if (contentAnalysis.averageLength >= 20 && contentAnalysis.emptyHeadings === 0) {
-        score += this.criteria.headingStructure.content;
-      } else if (contentAnalysis.averageLength >= 10 && contentAnalysis.emptyHeadings <= 1) {
-        score += this.criteria.headingStructure.content * 0.7;
-      } else {
-        score += this.criteria.headingStructure.content * 0.3;
-      }
-      
-      // Generate details string
-      details = `${totalHeadings} headings found. H1: ${headings.h1}, Hierarchy: ${breakdown.hierarchyScore}, Avg length: ${contentAnalysis.averageLength} chars`;
-      
-      // Determine status
-      if (score >= maxScore * 0.8) {
-        status = 'excellent';
-      } else if (score >= maxScore * 0.6) {
-        status = 'good';
-      } else if (score >= maxScore * 0.3) {
-        status = 'partial';
-      }
-      
-    } catch (error) {
-      logger.error(`Heading structure analysis error: ${error.message}`);
-      details = `Heading analysis error: ${error.message}`;
-      breakdown = { error: error.message };
-    }
-    
-    return { score: Math.min(score, maxScore), maxScore, status, details, breakdown };
   }
 
   /**
    * Validate heading hierarchy logic
-   * @param {Object} $ - Cheerio instance
-   * @returns {Object} Hierarchy validation result
+   * @param $ - Cheerio instance
+   * @returns Hierarchy validation result
    */
-  validateHeadingHierarchy($) {
+  validateHeadingHierarchy($: cheerio.CheerioAPI): HierarchyAnalysis {
     const headingElements = $('h1, h2, h3, h4, h5, h6').toArray();
     const headingLevels = headingElements.map(el => parseInt(el.tagName.charAt(1)));
     
     let logicalOrder = true;
-    let skipLevels = [];
+    let skipLevels: string[] = [];
     let maxDepth = Math.max(...headingLevels) || 0;
     
     for (let i = 1; i < headingLevels.length; i++) {
@@ -324,7 +467,7 @@ class LLMFormattingAnalyzer {
       hasH1: headingLevels.includes(1),
       multipleH1: headingLevels.filter(level => level === 1).length > 1,
       logicalOrder,
-      skipLevels: [...new Set(skipLevels)],
+      skipLevels: Array.from(new Set(skipLevels)),
       maxDepth,
       sequence: headingLevels
     };
@@ -332,10 +475,10 @@ class LLMFormattingAnalyzer {
 
   /**
    * Analyze heading content quality
-   * @param {Object} $ - Cheerio instance
-   * @returns {Object} Content analysis result
+   * @param $ - Cheerio instance
+   * @returns Content analysis result
    */
-  analyzeHeadingContent($) {
+  analyzeHeadingContent($: cheerio.CheerioAPI): HeadingContentAnalysis {
     const headings = $('h1, h2, h3, h4, h5, h6');
     let totalLength = 0;
     let emptyHeadings = 0;
@@ -361,816 +504,29 @@ class LLMFormattingAnalyzer {
   }
 
   /**
-   * Analyze semantic HTML5 elements usage
-   * @param {Object} $ - Cheerio instance
-   * @returns {Object} Semantic elements analysis result
-   */
-  analyzeSemanticElements($) {
-    const maxScore = Object.values(this.criteria.semanticElements).reduce((a, b) => a + b, 0);
-    let score = 0;
-    let status = 'fail';
-    let details = '';
-    let breakdown = {};
-    
-    try {
-      // Count semantic elements
-      const structural = {
-        article: $('article').length,
-        section: $('section').length,
-        nav: $('nav').length,
-        aside: $('aside').length,
-        header: $('header').length,
-        footer: $('footer').length,
-        main: $('main').length
-      };
-      
-      const content = {
-        figure: $('figure').length,
-        figcaption: $('figcaption').length,
-        blockquote: $('blockquote').length,
-        cite: $('cite').length,
-        time: $('time').length,
-        address: $('address').length
-      };
-      
-      breakdown.structural = structural;
-      breakdown.content = content;
-      
-      // Calculate semantic ratio
-      const semanticCount = Object.values(structural).reduce((a, b) => a + b, 0) + 
-                           Object.values(content).reduce((a, b) => a + b, 0);
-      const totalElements = $('*').length;
-      const semanticRatio = totalElements > 0 ? semanticCount / totalElements : 0;
-      
-      breakdown.semanticRatio = Math.round(semanticRatio * 100) / 100;
-      
-      // Usage scoring (15 points)
-      if (semanticRatio >= 0.15) {
-        score += this.criteria.semanticElements.usage;
-      } else if (semanticRatio >= 0.08) {
-        score += this.criteria.semanticElements.usage * 0.7;
-      } else if (semanticRatio >= 0.03) {
-        score += this.criteria.semanticElements.usage * 0.4;
-      }
-      
-      // Structure scoring (10 points)
-      const structuralScore = this.evaluateSemanticStructure($, structural);
-      score += structuralScore.score;
-      breakdown.structureAnalysis = structuralScore;
-      
-      // Landmarks scoring (5 points)
-      const landmarks = this.analyzeLandmarks(structural);
-      score += landmarks.score;
-      breakdown.landmarks = landmarks;
-      
-      // Generate details string
-      const semanticPercentage = Math.round(semanticRatio * 100);
-      details = `${semanticCount} semantic elements (${semanticPercentage}% ratio). Landmarks: ${landmarks.found.join(', ') || 'none'}`;
-      
-      // Determine status
-      if (score >= maxScore * 0.8) {
-        status = 'excellent';
-      } else if (score >= maxScore * 0.6) {
-        status = 'good';
-      } else if (score >= maxScore * 0.3) {
-        status = 'partial';
-      }
-      
-    } catch (error) {
-      logger.error(`Semantic elements analysis error: ${error.message}`);
-      details = `Semantic analysis error: ${error.message}`;
-      breakdown = { error: error.message };
-    }
-    
-    return { score: Math.min(score, maxScore), maxScore, status, details, breakdown };
-  }
-
-  /**
-   * Evaluate semantic structure quality
-   * @param {Object} $ - Cheerio instance
-   * @param {Object} structural - Structural elements count
-   * @returns {Object} Structure evaluation result
-   */
-  evaluateSemanticStructure($, structural) {
-    let score = 0;
-    const maxPoints = this.criteria.semanticElements.structure;
-    const issues = [];
-    
-    // Check for proper document structure
-    if (structural.main >= 1) {
-      score += 3;
-    } else {
-      issues.push('Missing main element');
-    }
-    
-    if (structural.header >= 1) {
-      score += 2;
-    } else {
-      issues.push('Missing header element');
-    }
-    
-    if (structural.nav >= 1) {
-      score += 2;
-    } else {
-      issues.push('Missing navigation element');
-    }
-    
-    // Check for content organization
-    if (structural.article > 0 || structural.section > 0) {
-      score += 2;
-    } else {
-      issues.push('No content organization elements (article/section)');
-    }
-    
-    // Bonus for complete structure
-    if (structural.footer >= 1) {
-      score += 1;
-    }
-    
-    return {
-      score: Math.min(score, maxPoints),
-      maxPoints,
-      issues,
-      complete: issues.length === 0
-    };
-  }
-
-  /**
-   * Analyze landmark elements for accessibility
-   * @param {Object} structural - Structural elements count
-   * @returns {Object} Landmarks analysis result
-   */
-  analyzeLandmarks(structural) {
-    const landmarks = ['main', 'nav', 'aside', 'header', 'footer'];
-    const found = landmarks.filter(landmark => structural[landmark] > 0);
-    const maxPoints = this.criteria.semanticElements.landmarks;
-    
-    let score = 0;
-    if (found.length >= 4) {
-      score = maxPoints;
-    } else if (found.length >= 2) {
-      score = maxPoints * 0.7;
-    } else if (found.length >= 1) {
-      score = maxPoints * 0.4;
-    }
-    
-    return {
-      score: Math.min(score, maxPoints),
-      maxPoints,
-      found,
-      total: landmarks.length,
-      coverage: Math.round((found.length / landmarks.length) * 100)
-    };
-  }
-
-  /**
-   * Analyze structured content (lists, tables, organization)
-   * @param {Object} $ - Cheerio instance
-   * @returns {Object} Structured content analysis result
-   */
-  analyzeStructuredContent($) {
-    const maxScore = Object.values(this.criteria.structuredContent).reduce((a, b) => a + b, 0);
-    let score = 0;
-    let status = 'fail';
-    let details = '';
-    let breakdown = {};
-    
-    try {
-      // Analyze lists
-      const listsAnalysis = this.analyzeLists($);
-      breakdown.lists = listsAnalysis;
-      score += listsAnalysis.score;
-      
-      // Analyze tables
-      const tablesAnalysis = this.analyzeTables($);
-      breakdown.tables = tablesAnalysis;
-      score += tablesAnalysis.score;
-      
-      // Analyze content organization
-      const organizationAnalysis = this.analyzeContentOrganization($);
-      breakdown.organization = organizationAnalysis;
-      score += organizationAnalysis.score;
-      
-      // Generate details string
-      const listCount = listsAnalysis.total;
-      const tableCount = tablesAnalysis.total;
-      details = `Lists: ${listCount}, Tables: ${tableCount}, Organization: ${organizationAnalysis.level}`;
-      
-      // Determine status
-      if (score >= maxScore * 0.8) {
-        status = 'excellent';
-      } else if (score >= maxScore * 0.6) {
-        status = 'good';
-      } else if (score >= maxScore * 0.3) {
-        status = 'partial';
-      }
-      
-    } catch (error) {
-      logger.error(`Structured content analysis error: ${error.message}`);
-      details = `Structured content analysis error: ${error.message}`;
-      breakdown = { error: error.message };
-    }
-    
-    return { score: Math.min(score, maxScore), maxScore, status, details, breakdown };
-  }
-
-  /**
-   * Analyze lists structure and quality
-   * @param {Object} $ - Cheerio instance
-   * @returns {Object} Lists analysis result
-   */
-  analyzeLists($) {
-    const maxPoints = this.criteria.structuredContent.lists;
-    let score = 0;
-    
-    const unordered = $('ul');
-    const ordered = $('ol');
-    const definition = $('dl');
-    
-    const analysis = {
-      unordered: {
-        count: unordered.length,
-        nested: unordered.find('ul, ol').length,
-        averageItems: this.calculateAverageListItems(unordered, $)
-      },
-      ordered: {
-        count: ordered.length,
-        nested: ordered.find('ul, ol').length,
-        averageItems: this.calculateAverageListItems(ordered, $)
-      },
-      definition: {
-        count: definition.length,
-        properStructure: this.validateDefinitionLists($)
-      },
-      total: unordered.length + ordered.length + definition.length
-    };
-    
-    // Scoring based on list usage and quality
-    const totalLists = analysis.total;
-    if (totalLists >= 5) {
-      score += maxPoints;
-    } else if (totalLists >= 3) {
-      score += maxPoints * 0.8;
-    } else if (totalLists >= 1) {
-      score += maxPoints * 0.5;
-    }
-    
-    return { ...analysis, score: Math.min(score, maxPoints), maxPoints };
-  }
-
-  /**
-   * Calculate average items in lists
-   * @param {Object} lists - jQuery list elements
-   * @param {Object} $ - Cheerio instance
-   * @returns {number} Average number of items
-   */
-  calculateAverageListItems(lists, $) {
-    if (lists.length === 0) return 0;
-    
-    let totalItems = 0;
-    lists.each((i, list) => {
-      totalItems += $(list).children('li').length;
-    });
-    
-    return Math.round(totalItems / lists.length);
-  }
-
-  /**
-   * Validate definition lists structure
-   * @param {Object} $ - Cheerio instance
-   * @returns {boolean} Whether definition lists are properly structured
-   */
-  validateDefinitionLists($) {
-    const definitionLists = $('dl');
-    let valid = true;
-    
-    definitionLists.each((i, dl) => {
-      const terms = $(dl).children('dt').length;
-      const definitions = $(dl).children('dd').length;
-      
-      // Basic validation: should have both terms and definitions
-      if (terms === 0 || definitions === 0) {
-        valid = false;
-      }
-    });
-    
-    return valid;
-  }
-
-  /**
-   * Analyze tables structure and accessibility
-   * @param {Object} $ - Cheerio instance
-   * @returns {Object} Tables analysis result
-   */
-  analyzeTables($) {
-    const maxPoints = this.criteria.structuredContent.tables;
-    let score = 0;
-    
-    const tables = $('table');
-    const withHeaders = tables.filter((i, table) => $(table).find('th').length > 0).length;
-    const withCaption = tables.filter((i, table) => $(table).find('caption').length > 0).length;
-    
-    const analysis = {
-      total: tables.length,
-      withHeaders,
-      withCaption,
-      accessibility: this.analyzeTableAccessibility($),
-      responsive: this.checkResponsiveTables($)
-    };
-    
-    if (tables.length === 0) {
-      score = maxPoints * 0.5; // Neutral score for no tables
-    } else {
-      // Score based on table quality
-      const headerRatio = withHeaders / tables.length;
-      const captionRatio = withCaption / tables.length;
-      
-      if (headerRatio >= 0.8 && analysis.accessibility.score > 0.7) {
-        score = maxPoints;
-      } else if (headerRatio >= 0.5) {
-        score = maxPoints * 0.7;
-      } else {
-        score = maxPoints * 0.3;
-      }
-    }
-    
-    return { ...analysis, score: Math.min(score, maxPoints), maxPoints };
-  }
-
-  /**
-   * Analyze table accessibility features
-   * @param {Object} $ - Cheerio instance
-   * @returns {Object} Table accessibility analysis
-   */
-  analyzeTableAccessibility($) {
-    const tables = $('table');
-    let scopeUsage = 0;
-    let summaryUsage = 0;
-    
-    tables.each((i, table) => {
-      const $table = $(table);
-      
-      if ($table.find('[scope]').length > 0) {
-        scopeUsage++;
-      }
-      
-      if ($table.attr('summary') || $table.find('caption').length > 0) {
-        summaryUsage++;
-      }
-    });
-    
-    const totalTables = tables.length;
-    
-    return {
-      scope: totalTables > 0 ? scopeUsage / totalTables : 0,
-      summary: totalTables > 0 ? summaryUsage / totalTables : 0,
-      score: totalTables > 0 ? (scopeUsage + summaryUsage) / (totalTables * 2) : 0
-    };
-  }
-
-  /**
-   * Check for responsive table implementations
-   * @param {Object} $ - Cheerio instance
-   * @returns {boolean} Whether tables appear responsive
-   */
-  checkResponsiveTables($) {
-    const tables = $('table');
-    let responsiveCount = 0;
-    
-    tables.each((i, table) => {
-      const $table = $(table);
-      const classes = $table.attr('class') || '';
-      const parent = $table.parent();
-      
-      // Check for common responsive patterns
-      if (classes.includes('responsive') || 
-          classes.includes('table-responsive') ||
-          parent.hasClass('table-responsive') ||
-          parent.hasClass('overflow-x-auto')) {
-        responsiveCount++;
-      }
-    });
-    
-    return tables.length > 0 ? responsiveCount / tables.length >= 0.5 : true;
-  }
-
-  /**
-   * Analyze content organization
-   * @param {Object} $ - Cheerio instance
-   * @returns {Object} Content organization analysis
-   */
-  analyzeContentOrganization($) {
-    const maxPoints = this.criteria.contentOrganization.organization;
-    let score = 0;
-    
-    // Check for content organization patterns
-    const articles = $('article').length;
-    const sections = $('section').length;
-    const paragraphs = $('p').length;
-    const divs = $('div').length;
-    
-    // Calculate organization ratio
-    const organizedContent = articles + sections;
-    const totalContainers = organizedContent + divs;
-    const organizationRatio = totalContainers > 0 ? organizedContent / totalContainers : 0;
-    
-    let level = 'poor';
-    if (organizationRatio >= 0.3) {
-      score = maxPoints;
-      level = 'excellent';
-    } else if (organizationRatio >= 0.15) {
-      score = maxPoints * 0.7;
-      level = 'good';
-    } else if (organizedContent > 0) {
-      score = maxPoints * 0.4;
-      level = 'basic';
-    }
-    
-    return {
-      score: Math.min(score, maxPoints),
-      maxPoints,
-      level,
-      organizationRatio: Math.round(organizationRatio * 100) / 100,
-      articles,
-      sections,
-      paragraphs
-    };
-  }
-
-  /**
-   * Analyze citations and references
-   * @param {Object} $ - Cheerio instance
-   * @param {string} url - URL for context
-   * @returns {Object} Citations and references analysis result
-   */
-  analyzeCitationsAndReferences($, url) {
-    const maxScore = Object.values(this.criteria.citationsReferences).reduce((a, b) => a + b, 0);
-    let score = 0;
-    let status = 'fail';
-    let details = '';
-    let breakdown = {};
-    
-    try {
-      // Analyze citations
-      const citationsAnalysis = this.analyzeCitations($);
-      breakdown.citations = citationsAnalysis;
-      score += citationsAnalysis.score;
-      
-      // Analyze link quality
-      const linksAnalysis = this.analyzeLinkQuality($, url);
-      breakdown.links = linksAnalysis;
-      score += linksAnalysis.score;
-      
-      // Generate details string
-      const citationCount = citationsAnalysis.total;
-      const linkCount = linksAnalysis.total;
-      const linkQuality = linksAnalysis.descriptiveRatio;
-      
-      details = `Citations: ${citationCount}, Links: ${linkCount}, Descriptive links: ${Math.round(linkQuality * 100)}%`;
-      
-      // Determine status
-      if (score >= maxScore * 0.8) {
-        status = 'excellent';
-      } else if (score >= maxScore * 0.6) {
-        status = 'good';
-      } else if (score >= maxScore * 0.3) {
-        status = 'partial';
-      }
-      
-    } catch (error) {
-      logger.error(`Citations and references analysis error: ${error.message}`);
-      details = `Citations analysis error: ${error.message}`;
-      breakdown = { error: error.message };
-    }
-    
-    return { score: Math.min(score, maxScore), maxScore, status, details, breakdown };
-  }
-
-  /**
-   * Analyze citation elements
-   * @param {Object} $ - Cheerio instance
-   * @returns {Object} Citations analysis result
-   */
-  analyzeCitations($) {
-    const maxPoints = this.criteria.citationsReferences.citations;
-    let score = 0;
-    
-    const blockquotes = $('blockquote').length;
-    const cites = $('cite').length;
-    const qs = $('q').length;
-    
-    // Check for proper attribution
-    let properAttribution = 0;
-    $('blockquote').each((i, el) => {
-      const $blockquote = $(el);
-      if ($blockquote.find('cite').length > 0 || $blockquote.attr('cite')) {
-        properAttribution++;
-      }
-    });
-    
-    const total = blockquotes + cites + qs;
-    const attributionRatio = blockquotes > 0 ? properAttribution / blockquotes : 1;
-    
-    // Scoring based on citation usage and quality
-    if (total >= 3 && attributionRatio >= 0.8) {
-      score = maxPoints;
-    } else if (total >= 1 && attributionRatio >= 0.5) {
-      score = maxPoints * 0.7;
-    } else if (total >= 1) {
-      score = maxPoints * 0.4;
-    } else {
-      score = maxPoints * 0.5; // Neutral for no citations
-    }
-    
-    return {
-      score: Math.min(score, maxPoints),
-      maxPoints,
-      total,
-      blockquotes,
-      cites,
-      qs,
-      properAttribution,
-      attributionRatio: Math.round(attributionRatio * 100) / 100
-    };
-  }
-
-  /**
-   * Analyze link quality and descriptiveness
-   * @param {Object} $ - Cheerio instance
-   * @param {string} url - Current page URL
-   * @returns {Object} Link quality analysis result
-   */
-  analyzeLinkQuality($, url) {
-    const maxPoints = this.criteria.citationsReferences.linkQuality;
-    let score = 0;
-    
-    const links = $('a[href]');
-    let descriptive = 0;
-    let generic = 0;
-    let externalLinks = 0;
-    let internalLinks = 0;
-    
-    // Generic link text patterns
-    const genericPatterns = [
-      /^click here$/i,
-      /^read more$/i,
-      /^more$/i,
-      /^here$/i,
-      /^link$/i,
-      /^this$/i,
-      /^continue$/i,
-      /^go$/i
-    ];
-    
-    links.each((i, link) => {
-      const $link = $(link);
-      const href = $link.attr('href');
-      const text = $link.text().trim();
-      
-      // Classify internal vs external
-      if (href.startsWith('http') && !href.includes(new URL(url).hostname)) {
-        externalLinks++;
-      } else if (href.startsWith('/') || href.includes(new URL(url).hostname)) {
-        internalLinks++;
-      }
-      
-      // Check link text quality
-      if (text.length >= 3) {
-        const isGeneric = genericPatterns.some(pattern => pattern.test(text));
-        if (isGeneric) {
-          generic++;
-        } else if (text.length >= 10) {
-          descriptive++;
-        }
-      }
-    });
-    
-    const total = links.length;
-    const descriptiveRatio = total > 0 ? descriptive / total : 0;
-    
-    // Scoring based on descriptive link ratio
-    if (descriptiveRatio >= 0.8) {
-      score = maxPoints;
-    } else if (descriptiveRatio >= 0.6) {
-      score = maxPoints * 0.8;
-    } else if (descriptiveRatio >= 0.4) {
-      score = maxPoints * 0.6;
-    } else if (descriptiveRatio >= 0.2) {
-      score = maxPoints * 0.4;
-    } else {
-      score = maxPoints * 0.2;
-    }
-    
-    return {
-      score: Math.min(score, maxPoints),
-      maxPoints,
-      total,
-      descriptive,
-      generic,
-      externalLinks,
-      internalLinks,
-      descriptiveRatio: Math.round(descriptiveRatio * 100) / 100
-    };
-  }
-
-  /**
-   * Validate overall content structure
-   * @param {Object} analysis - Combined analysis results
-   * @returns {Object} Content structure validation
-   */
-  validateContentStructure(analysis) {
-    const issues = [];
-    const warnings = [];
-    
-    // Check heading issues
-    if (analysis.headings.breakdown.singleH1 && !analysis.headings.breakdown.singleH1.pass) {
-      if (analysis.headings.breakdown.singleH1.count === 0) {
-        issues.push('Missing H1 tag - essential for content hierarchy');
-      } else {
-        issues.push('Multiple H1 tags found - use only one H1 per page');
-      }
-    }
-    
-    if (analysis.headings.breakdown.hierarchy && analysis.headings.breakdown.hierarchy.skipLevels.length > 0) {
-      warnings.push(`Skipped heading levels: ${analysis.headings.breakdown.hierarchy.skipLevels.join(', ')}`);
-    }
-    
-    // Check semantic structure issues
-    if (analysis.semantic.breakdown.structureAnalysis && analysis.semantic.breakdown.structureAnalysis.issues.length > 0) {
-      issues.push(...analysis.semantic.breakdown.structureAnalysis.issues.map(issue => `Semantic: ${issue}`));
-    }
-    
-    // Check semantic ratio
-    if (analysis.semantic.breakdown.semanticRatio < 0.05) {
-      warnings.push('Very low semantic HTML usage - consider using more semantic elements');
-    }
-    
-    // Check structured content
-    if (analysis.structured.breakdown.tables && analysis.structured.breakdown.tables.total > 0) {
-      const tableHeaderRatio = analysis.structured.breakdown.tables.withHeaders / analysis.structured.breakdown.tables.total;
-      if (tableHeaderRatio < 0.5) {
-        warnings.push('Many tables without proper headers - affects accessibility');
-      }
-    }
-    
-    // Check link quality
-    if (analysis.citations.breakdown.links && analysis.citations.breakdown.links.descriptiveRatio < 0.3) {
-      warnings.push('Many generic link texts found - use descriptive link text');
-    }
-    
-    return {
-      valid: issues.length === 0,
-      issues,
-      warnings,
-      summary: `${issues.length} issues, ${warnings.length} warnings`
-    };
-  }
-
-  /**
-   * Generate context-aware LLM recommendations
-   * @param {Object} headings - Heading analysis results
-   * @param {Object} semantic - Semantic analysis results
-   * @param {Object} structured - Structured content analysis results
-   * @param {Object} citations - Citations analysis results
-   * @param {string} url - URL for context
-   * @returns {Array} Array of prioritized recommendations
-   */
-  async generateLLMRecommendations(headings, semantic, structured, citations, url) {
-    const recommendations = [];
-    
-    // Critical heading issues
-    if (headings.breakdown.singleH1 && !headings.breakdown.singleH1.pass) {
-      const priority = headings.breakdown.singleH1.count === 0 ? 'critical' : 'high';
-      const action = headings.breakdown.singleH1.count === 0 
-        ? 'Add a single H1 tag to establish main topic hierarchy'
-        : 'Use only one H1 tag per page - convert additional H1s to H2 or lower';
-      
-      recommendations.push({
-        priority,
-        category: 'headings',
-        issue: headings.breakdown.singleH1.issue,
-        action,
-        impact: 'Critical for LLM topic understanding and content hierarchy'
-      });
-    }
-    
-    // Heading hierarchy issues
-    if (headings.breakdown.hierarchy && headings.breakdown.hierarchy.skipLevels.length > 0) {
-      recommendations.push({
-        priority: 'medium',
-        category: 'headings',
-        issue: `Skipped heading levels: ${headings.breakdown.hierarchy.skipLevels.join(', ')}`,
-        action: 'Follow logical heading sequence (H1→H2→H3) without skipping levels',
-        impact: 'Improves content structure comprehension by LLMs'
-      });
-    }
-    
-    // Semantic HTML recommendations
-    if (semantic.breakdown.semanticRatio < 0.1) {
-      recommendations.push({
-        priority: 'high',
-        category: 'semantic',
-        issue: 'Very low semantic HTML5 usage',
-        action: 'Replace generic divs with semantic elements (article, section, nav, header, footer)',
-        impact: 'Significantly enhances LLM content understanding and parsing'
-      });
-    }
-    
-    // Missing landmarks
-    if (semantic.breakdown.landmarks && semantic.breakdown.landmarks.found.length < 2) {
-      recommendations.push({
-        priority: 'medium',
-        category: 'semantic',
-        issue: 'Missing essential landmark elements',
-        action: 'Add main, nav, and header elements for better content structure',
-        impact: 'Helps LLMs identify content regions and navigation'
-      });
-    }
-    
-    // Content organization
-    if (structured.breakdown.organization && structured.breakdown.organization.organizationRatio < 0.15) {
-      recommendations.push({
-        priority: 'medium',
-        category: 'structure',
-        issue: 'Poor content organization structure',
-        action: 'Use article and section elements to organize content logically',
-        impact: 'Improves content hierarchy recognition by LLMs'
-      });
-    }
-    
-    // Link quality issues
-    if (citations.breakdown.links && citations.breakdown.links.descriptiveRatio < 0.5) {
-      recommendations.push({
-        priority: 'low',
-        category: 'links',
-        issue: 'Many generic link texts found',
-        action: 'Use descriptive link text instead of "click here" or "read more"',
-        impact: 'Provides better context for LLM link understanding'
-      });
-    }
-    
-    // Table accessibility
-    if (structured.breakdown.tables && structured.breakdown.tables.total > 0) {
-      const headerRatio = structured.breakdown.tables.withHeaders / structured.breakdown.tables.total;
-      if (headerRatio < 0.7) {
-        recommendations.push({
-          priority: 'medium',
-          category: 'tables',
-          issue: 'Tables without proper headers',
-          action: 'Add th elements and scope attributes to table headers',
-          impact: 'Enables better table structure understanding by LLMs'
-        });
-      }
-    }
-    
-    // Sort by priority
-    recommendations.sort((a, b) => this.priorityWeight[a.priority] - this.priorityWeight[b.priority]);
-    
-    // Convert to simple strings for backward compatibility
-    return recommendations.map(rec => 
-      `${this.getPriorityIcon(rec.priority)} ${rec.action} (${rec.impact})`
-    );
-  }
-
-  /**
-   * Get priority icon for recommendations
-   * @param {string} priority - Priority level
-   * @returns {string} Icon representation
-   */
-  getPriorityIcon(priority) {
-    const icons = {
-      critical: '🚨',
-      high: '❌',
-      medium: '⚠️',
-      low: '💡'
-    };
-    return icons[priority] || '💡';
-  }
-
-  /**
    * Detect content type based on HTML structure and URL patterns
-   * @param {string} htmlContent - HTML content to analyze
-   * @param {string} url - URL being analyzed
-   * @returns {Object} Content type detection result
+   * @param htmlContent - HTML content to analyze
+   * @param url - URL being analyzed
+   * @returns Content type detection result
    */
-  detectContentType(htmlContent, url) {
+  detectContentType(htmlContent: string, url: string): ContentType {
     const $ = cheerio.load(htmlContent);
     const indicators = JSON.parse(JSON.stringify(this.contentTypePatterns)); // Deep clone
     
     try {
       // Calculate weights for each content type
       Object.keys(indicators).forEach(type => {
-        const typeData = indicators[type];
+        const typeData = indicators[type as keyof ContentTypePatterns];
         
         // Weight based on selectors
-        typeData.selectors.forEach(selector => {
+        typeData.selectors.forEach((selector: string) => {
           if ($(selector).length > 0) {
             typeData.weight += 2;
           }
         });
         
         // Weight based on URL patterns
-        typeData.patterns.forEach(pattern => {
+        typeData.patterns.forEach((pattern: string) => {
           if (url.toLowerCase().includes(pattern)) {
             typeData.weight += 1;
           }
@@ -1178,7 +534,7 @@ class LLMFormattingAnalyzer {
         
         // Weight based on page text content
         const pageText = $('body').text().toLowerCase();
-        typeData.patterns.forEach(pattern => {
+        typeData.patterns.forEach((pattern: string) => {
           const regex = new RegExp(pattern, 'gi');
           const matches = pageText.match(regex);
           if (matches) {
@@ -1189,19 +545,19 @@ class LLMFormattingAnalyzer {
       
       // Sort by weight and return primary type
       const sortedTypes = Object.entries(indicators)
-        .sort(([,a], [,b]) => b.weight - a.weight);
+        .sort(([,a], [,b]) => (b as ContentTypePattern).weight - (a as ContentTypePattern).weight);
       
       return {
         primary: sortedTypes[0][0],
-        confidence: sortedTypes[0][1].weight,
+        confidence: (sortedTypes[0][1] as ContentTypePattern).weight,
         alternatives: sortedTypes.slice(1, 3).map(([type, data]) => ({
           type,
-          confidence: data.weight
+          confidence: (data as ContentTypePattern).weight
         }))
       };
       
     } catch (error) {
-      logger.warn(`Content type detection failed: ${error.message}`);
+      logger.warn(`Content type detection failed: ${(error as Error).message}`);
       return {
         primary: 'generic',
         confidence: 0,
@@ -1212,16 +568,16 @@ class LLMFormattingAnalyzer {
 
   /**
    * Advanced heading structure analysis with semantic value assessment
-   * @param {Object} $ - Cheerio instance
-   * @param {Object} contentType - Detected content type
-   * @returns {Object} Advanced heading analysis result
+   * @param $ - Cheerio instance
+   * @param contentType - Detected content type
+   * @returns Advanced heading analysis result
    */
-  analyzeHeadingStructureAdvanced($, contentType) {
+  analyzeHeadingStructureAdvanced($: cheerio.CheerioAPI, contentType: ContentType): AnalysisResult {
     const maxScore = Object.values(this.criteria.headingStructure).reduce((a, b) => a + b, 0);
     let score = 0;
     let status = 'fail';
     let details = '';
-    let breakdown = {};
+    let breakdown: any = {};
     
     try {
       const headings = $('h1, h2, h3, h4, h5, h6').toArray();
@@ -1283,9 +639,9 @@ class LLMFormattingAnalyzer {
       }
       
     } catch (error) {
-      logger.error(`Advanced heading analysis error: ${error.message}`);
-      details = `Heading analysis error: ${error.message}`;
-      breakdown = { error: error.message };
+      logger.error(`Advanced heading analysis error: ${(error as Error).message}`);
+      details = `Heading analysis error: ${(error as Error).message}`;
+      breakdown = { error: (error as Error).message };
     }
     
     return { score: Math.min(score, maxScore), maxScore, status, details, breakdown };
@@ -1293,17 +649,17 @@ class LLMFormattingAnalyzer {
 
   /**
    * Analyze heading content quality with advanced metrics
-   * @param {Object} $ - Cheerio instance
-   * @returns {Object} Advanced content analysis
+   * @param $ - Cheerio instance
+   * @returns Advanced content analysis
    */
-  analyzeHeadingContentAdvanced($) {
+  analyzeHeadingContentAdvanced($: cheerio.CheerioAPI): HeadingContentAdvanced {
     const headings = $('h1, h2, h3, h4, h5, h6');
     let totalLength = 0;
     let descriptiveCount = 0;
     let duplicates = 0;
     let keywordStuffing = false;
     
-    const headingTexts = [];
+    const headingTexts: string[] = [];
     
     headings.each((i, el) => {
       const text = $(el).text().trim();
@@ -1311,13 +667,14 @@ class LLMFormattingAnalyzer {
       totalLength += text.length;
       
       // Check descriptiveness (avoid generic terms)
-      const genericTerms = ['click here', 'read more', 'home', 'about', 'contact', 'here', 'more'];
+      const genericTerms = ['click here', 'read more', 'learn more', 'here', 'more', 'link',
+      'this', 'continue', 'next', 'previous', 'go', 'see more'];
       const isDescriptive = !genericTerms.some(term => text.toLowerCase().includes(term)) && text.length > 5;
       if (isDescriptive) descriptiveCount++;
       
       // Check for keyword stuffing (repeated words)
       const words = text.toLowerCase().split(/\s+/);
-      const wordCounts = {};
+      const wordCounts: Record<string, number> = {};
       words.forEach(word => {
         if (word.length > 3) {
           wordCounts[word] = (wordCounts[word] || 0) + 1;
@@ -1343,17 +700,17 @@ class LLMFormattingAnalyzer {
 
   /**
    * Analyze heading semantic value for LLM understanding
-   * @param {Object} $ - Cheerio instance
-   * @param {Object} contentType - Content type context
-   * @returns {Object} Semantic value analysis
+   * @param $ - Cheerio instance
+   * @param contentType - Content type context
+   * @returns Semantic value analysis
    */
-  analyzeHeadingSemanticValue($, contentType) {
+  analyzeHeadingSemanticValue($: cheerio.CheerioAPI, contentType: ContentType): HeadingSemanticValue {
     const headings = $('h1, h2, h3, h4, h5, h6');
     let informationScent = 0;
     let navigationValue = 0;
     
     // Content type specific analysis
-    const expectations = {
+    const expectations: Record<string, string[]> = {
       article: ['introduction', 'conclusion', 'summary', 'analysis'],
       documentation: ['overview', 'installation', 'usage', 'examples', 'api'],
       product: ['features', 'specifications', 'pricing', 'reviews'],
@@ -1394,15 +751,15 @@ class LLMFormattingAnalyzer {
 
   /**
    * Advanced semantic elements analysis with accessibility focus
-   * @param {Object} $ - Cheerio instance
-   * @returns {Object} Advanced semantic analysis result
+   * @param $ - Cheerio instance
+   * @returns Advanced semantic analysis result
    */
-  analyzeSemanticElementsAdvanced($) {
+  analyzeSemanticElementsAdvanced($: cheerio.CheerioAPI): AnalysisResult {
     const maxScore = Object.values(this.criteria.semanticElements).reduce((a, b) => a + b, 0);
     let score = 0;
     let status = 'fail';
     let details = '';
-    let breakdown = {};
+    let breakdown: any = {};
     
     try {
       // Enhanced semantic structure analysis
@@ -1456,9 +813,9 @@ class LLMFormattingAnalyzer {
       }
       
     } catch (error) {
-      logger.error(`Advanced semantic analysis error: ${error.message}`);
-      details = `Semantic analysis error: ${error.message}`;
-      breakdown = { error: error.message };
+      logger.error(`Advanced semantic analysis error: ${(error as Error).message}`);
+      details = `Semantic analysis error: ${(error as Error).message}`;
+      breakdown = { error: (error as Error).message };
     }
     
     return { score: Math.min(score, maxScore), maxScore, status, details, breakdown };
@@ -1466,10 +823,10 @@ class LLMFormattingAnalyzer {
 
   /**
    * Analyze semantic structure with enhanced metrics
-   * @param {Object} $ - Cheerio instance
-   * @returns {Object} Semantic structure analysis
+   * @param $ - Cheerio instance
+   * @returns Semantic structure analysis
    */
-  analyzeSemanticStructure($) {
+  analyzeSemanticStructure($: cheerio.CheerioAPI): SemanticStructureAnalysis {
     const structural = {
       article: $('article').length,
       section: $('section').length,
@@ -1505,10 +862,10 @@ class LLMFormattingAnalyzer {
 
   /**
    * Analyze accessibility features
-   * @param {Object} $ - Cheerio instance
-   * @returns {Object} Accessibility analysis
+   * @param $ - Cheerio instance
+   * @returns Accessibility analysis
    */
-  analyzeAccessibilityFeatures($) {
+  analyzeAccessibilityFeatures($: cheerio.CheerioAPI): AccessibilityFeatures {
     let score = 0;
     const features = {
       ariaLabels: $('[aria-label]').length,
@@ -1531,10 +888,10 @@ class LLMFormattingAnalyzer {
 
   /**
    * Analyze content flow and logical structure
-   * @param {Object} $ - Cheerio instance
-   * @returns {Object} Content flow analysis
+   * @param $ - Cheerio instance
+   * @returns Content flow analysis
    */
-  analyzeContentFlow($) {
+  analyzeContentFlow($: cheerio.CheerioAPI): ContentFlow {
     let logicalFlow = 0;
     const analysis = {
       hasMain: $('main').length > 0,
@@ -1555,15 +912,15 @@ class LLMFormattingAnalyzer {
 
   /**
    * Analyze content organization and readability
-   * @param {Object} $ - Cheerio instance
-   * @returns {Object} Content organization analysis
+   * @param $ - Cheerio instance
+   * @returns Content organization analysis
    */
-  analyzeContentOrganization($) {
+  analyzeContentOrganization($: cheerio.CheerioAPI): AnalysisResult {
     const maxScore = Object.values(this.criteria.contentOrganization).reduce((a, b) => a + b, 0);
     let score = 0;
     let status = 'fail';
     let details = '';
-    let breakdown = {};
+    let breakdown: any = {};
     
     try {
       // Structure analysis
@@ -1617,9 +974,9 @@ class LLMFormattingAnalyzer {
       }
       
     } catch (error) {
-      logger.error(`Content organization analysis error: ${error.message}`);
-      details = `Content analysis error: ${error.message}`;
-      breakdown = { error: error.message };
+      logger.error(`Content organization analysis error: ${(error as Error).message}`);
+      details = `Content analysis error: ${(error as Error).message}`;
+      breakdown = { error: (error as Error).message };
     }
     
     return { score: Math.min(score, maxScore), maxScore, status, details, breakdown };
@@ -1627,10 +984,10 @@ class LLMFormattingAnalyzer {
 
   /**
    * Analyze content structure quality
-   * @param {Object} $ - Cheerio instance
-   * @returns {Object} Structure analysis
+   * @param $ - Cheerio instance
+   * @returns Structure analysis
    */
-  analyzeContentStructure($) {
+  analyzeContentStructure($: cheerio.CheerioAPI): StructureAnalysis {
     const paragraphs = $('p');
     let score = 0;
     
@@ -1664,16 +1021,16 @@ class LLMFormattingAnalyzer {
 
   /**
    * Analyze text readability
-   * @param {Object} $ - Cheerio instance
-   * @returns {Object} Readability analysis
+   * @param $ - Cheerio instance
+   * @returns Readability analysis
    */
-  analyzeReadability($) {
+  analyzeReadability($: cheerio.CheerioAPI): ReadabilityAnalysis {
     const textContent = $('body').text().replace(/\s+/g, ' ').trim();
     const sentences = textContent.split(/[.!?]+/).filter(s => s.trim().length > 0);
     const words = textContent.split(/\s+/).filter(w => w.length > 0);
     
     if (sentences.length === 0 || words.length === 0) {
-      return { score: 0, level: 'unknown', complexity: 0 };
+      return { score: 0, level: 'unknown', complexity: 0, wordCount: 0, sentenceCount: 0 };
     }
     
     // Calculate basic readability metrics
@@ -1698,10 +1055,10 @@ class LLMFormattingAnalyzer {
 
   /**
    * Estimate syllables in words (simple heuristic)
-   * @param {Array} words - Array of words
-   * @returns {number} Average syllables per word
+   * @param words - Array of words
+   * @returns Average syllables per word
    */
-  estimateSyllables(words) {
+  estimateSyllables(words: string[]): number {
     let totalSyllables = 0;
     
     words.forEach(word => {
@@ -1720,10 +1077,10 @@ class LLMFormattingAnalyzer {
 
   /**
    * Analyze content density (text to markup ratio)
-   * @param {Object} $ - Cheerio instance
-   * @returns {Object} Density analysis
+   * @param $ - Cheerio instance
+   * @returns Density analysis
    */
-  analyzeContentDensity($) {
+  analyzeContentDensity($: cheerio.CheerioAPI): DensityAnalysis {
     const textContent = $('body').text().replace(/\s+/g, ' ').trim();
     const htmlContent = $.html();
     
@@ -1741,22 +1098,22 @@ class LLMFormattingAnalyzer {
 
   /**
    * Advanced link quality analysis
-   * @param {Object} $ - Cheerio instance
-   * @param {string} url - Base URL for internal link detection
-   * @returns {Object} Advanced link analysis
+   * @param $ - Cheerio instance
+   * @param url - Base URL for internal link detection
+   * @returns Advanced link analysis
    */
-  analyzeLinkQualityAdvanced($, url) {
+  analyzeLinkQualityAdvanced($: cheerio.CheerioAPI, url: string): AnalysisResult {
     const maxScore = Object.values(this.criteria.linkQuality).reduce((a, b) => a + b, 0);
     let score = 0;
     let status = 'fail';
     let details = '';
-    let breakdown = {};
+    let breakdown: any = {};
     
     try {
       const links = $('a[href]');
       const baseHost = new URL(url).hostname;
       
-      const analysis = {
+      const analysis: LinkAnalysis = {
         internal: { count: 0, descriptive: 0, contextual: 0 },
         external: { count: 0, descriptive: 0, authority: 0 },
         context: { total: links.length, descriptive: 0, generic: 0 }
@@ -1775,15 +1132,17 @@ class LLMFormattingAnalyzer {
         }
         
         try {
-          const linkUrl = new URL(href, url);
-          if (linkUrl.hostname === baseHost) {
-            analysis.internal.count++;
-            if (isDescriptive) analysis.internal.descriptive++;
-            if (this.hasContextualClues($, el)) analysis.internal.contextual++;
-          } else {
-            analysis.external.count++;
-            if (isDescriptive) analysis.external.descriptive++;
-            if (this.isAuthorityDomain(linkUrl.hostname)) analysis.external.authority++;
+          if (href) {
+            const linkUrl = new URL(href, url);
+            if (linkUrl.hostname === baseHost) {
+              analysis.internal.count++;
+              if (isDescriptive) analysis.internal.descriptive++;
+              if (this.hasContextualClues($, el)) analysis.internal.contextual++;
+            } else {
+              analysis.external.count++;
+              if (isDescriptive) analysis.external.descriptive++;
+              if (this.isAuthorityDomain(linkUrl.hostname)) analysis.external.authority++;
+            }
           }
         } catch (e) {
           // Invalid URL, skip
@@ -1841,9 +1200,9 @@ class LLMFormattingAnalyzer {
       }
       
     } catch (error) {
-      logger.error(`Link quality analysis error: ${error.message}`);
-      details = `Link analysis error: ${error.message}`;
-      breakdown = { error: error.message };
+      logger.error(`Link quality analysis error: ${(error as Error).message}`);
+      details = `Link analysis error: ${(error as Error).message}`;
+      breakdown = { error: (error as Error).message };
     }
     
     return { score: Math.min(score, maxScore), maxScore, status, details, breakdown };
@@ -1851,10 +1210,10 @@ class LLMFormattingAnalyzer {
 
   /**
    * Check if link text is descriptive
-   * @param {string} text - Link text
-   * @returns {boolean} Whether the link is descriptive
+   * @param text - Link text
+   * @returns Whether the link is descriptive
    */
-  isDescriptiveLink(text) {
+  isDescriptiveLink(text: string): boolean {
     const genericTerms = [
       'click here', 'read more', 'learn more', 'here', 'more', 'link',
       'this', 'continue', 'next', 'previous', 'go', 'see more'
@@ -1866,11 +1225,11 @@ class LLMFormattingAnalyzer {
 
   /**
    * Check if link has contextual clues around it
-   * @param {Object} $ - Cheerio instance
-   * @param {Object} el - Link element
-   * @returns {boolean} Whether link has contextual clues
+   * @param $ - Cheerio instance
+   * @param el - Link element
+   * @returns Whether link has contextual clues
    */
-  hasContextualClues($, el) {
+  hasContextualClues($: cheerio.CheerioAPI, el: any): boolean {
     const parent = $(el).parent();
     const siblings = parent.contents();
     
@@ -1888,10 +1247,10 @@ class LLMFormattingAnalyzer {
 
   /**
    * Check if domain is considered authoritative
-   * @param {string} hostname - Domain hostname
-   * @returns {boolean} Whether domain is authoritative
+   * @param hostname - Domain hostname
+   * @returns Whether domain is authoritative
    */
-  isAuthorityDomain(hostname) {
+  isAuthorityDomain(hostname: string): boolean {
     const authorityDomains = [
       'wikipedia.org', 'github.com', 'stackoverflow.com', 'mozilla.org',
       'w3.org', 'google.com', 'microsoft.com', 'apple.com', 'adobe.com',
@@ -1903,12 +1262,12 @@ class LLMFormattingAnalyzer {
 
   /**
    * Validate content accessibility with WCAG compliance
-   * @param {Object} $ - Cheerio instance
-   * @returns {Object} Accessibility validation result
+   * @param $ - Cheerio instance
+   * @returns Accessibility validation result
    */
-  validateContentAccessibility($) {
-    const issues = [];
-    const warnings = [];
+  validateContentAccessibility($: cheerio.CheerioAPI): AccessibilityValidation {
+    const issues: string[] = [];
+    const warnings: string[] = [];
     let wcagCompliance = 100;
     
     try {
@@ -1947,8 +1306,8 @@ class LLMFormattingAnalyzer {
       }
       
     } catch (error) {
-      logger.error(`Accessibility validation error: ${error.message}`);
-      issues.push(`Accessibility validation failed: ${error.message}`);
+      logger.error(`Accessibility validation error: ${(error as Error).message}`);
+      issues.push(`Accessibility validation failed: ${(error as Error).message}`);
       wcagCompliance = 0;
     }
     
@@ -1962,10 +1321,10 @@ class LLMFormattingAnalyzer {
 
   /**
    * Calculate semantic HTML ratio
-   * @param {Object} $ - Cheerio instance
-   * @returns {number} Semantic elements ratio
+   * @param $ - Cheerio instance
+   * @returns Semantic elements ratio
    */
-  calculateSemanticRatio($) {
+  calculateSemanticRatio($: cheerio.CheerioAPI): number {
     const semanticElements = $('article, section, nav, aside, header, footer, main, figure, figcaption, time, address').length;
     const totalElements = $('*').length;
     
@@ -1974,12 +1333,12 @@ class LLMFormattingAnalyzer {
 
   /**
    * Validate LLM optimization
-   * @param {Object} analysis - Combined analysis results
-   * @returns {Object} LLM optimization validation
+   * @param analysis - Combined analysis results
+   * @returns LLM optimization validation
    */
-  validateLLMOptimization(analysis) {
-    const llmIssues = [];
-    const optimizations = [];
+  validateLLMOptimization(analysis: any): LLMOptimization {
+    const llmIssues: string[] = [];
+    const optimizations: string[] = [];
     let llmOptimizationScore = 100;
     
     try {
@@ -2005,8 +1364,8 @@ class LLMFormattingAnalyzer {
       }
       
     } catch (error) {
-      logger.error(`LLM optimization validation error: ${error.message}`);
-      llmIssues.push(`LLM optimization validation failed: ${error.message}`);
+      logger.error(`LLM optimization validation error: ${(error as Error).message}`);
+      llmIssues.push(`LLM optimization validation failed: ${(error as Error).message}`);
       llmOptimizationScore = 0;
     }
     
@@ -2019,13 +1378,13 @@ class LLMFormattingAnalyzer {
 
   /**
    * Generate advanced context-aware recommendations
-   * @param {Object} analysis - Combined analysis results
-   * @param {string} url - URL being analyzed
-   * @param {Object} contentType - Detected content type
-   * @returns {Array} Advanced recommendations
+   * @param analysis - Combined analysis results
+   * @param url - URL being analyzed
+   * @param contentType - Detected content type
+   * @returns Advanced recommendations
    */
-  generateAdvancedRecommendations(analysis, url, contentType) {
-    const recommendations = [];
+  generateAdvancedRecommendations(analysis: any, url: string, contentType: ContentType): string[] {
+    const recommendations: Recommendation[] = [];
     
     try {
       // Content type specific recommendations
@@ -2074,19 +1433,34 @@ class LLMFormattingAnalyzer {
         .map(rec => `${this.getPriorityIcon(rec.priority)} ${rec.action} (${rec.impact})`);
       
     } catch (error) {
-      logger.error(`Advanced recommendations generation failed: ${error.message}`);
+      logger.error(`Advanced recommendations generation failed: ${(error as Error).message}`);
       return ['⚠️ Could not generate recommendations due to analysis error'];
     }
   }
 
   /**
-   * Get failure result for error handling - Updated for new criteria
-   * @param {string} category - Category that failed
-   * @param {string} error - Error message
-   * @returns {Object} Failure result object
+   * Get priority icon for recommendations
+   * @param priority - Priority level
+   * @returns Icon representation
    */
-  getFailureResult(category, error = 'Analysis failed') {
-    const maxScores = {
+  getPriorityIcon(priority: string): string {
+    const icons: Record<string, string> = {
+      critical: '🚨',
+      high: '❌',
+      medium: '⚠️',
+      low: '💡'
+    };
+    return icons[priority] || '💡';
+  }
+
+  /**
+   * Get failure result for error handling - Updated for new criteria
+   * @param category - Category that failed
+   * @param error - Error message
+   * @returns Failure result object
+   */
+  getFailureResult(category: string, error: string = 'Analysis failed'): AnalysisResult {
+    const maxScores: Record<string, number> = {
       headingStructure: Object.values(this.criteria.headingStructure).reduce((a, b) => a + b, 0),
       semanticElements: Object.values(this.criteria.semanticElements).reduce((a, b) => a + b, 0),
       contentOrganization: Object.values(this.criteria.contentOrganization).reduce((a, b) => a + b, 0),
@@ -2103,4 +1477,28 @@ class LLMFormattingAnalyzer {
   }
 }
 
-module.exports = LLMFormattingAnalyzer; 
+// Export types for external use
+export type {
+  LLMFormattingResult,
+  CriteriaWeights,
+  ContentType,
+  AnalysisResult,
+  HeadingStructure,
+  HierarchyAnalysis,
+  HeadingContentAnalysis,
+  HeadingContentAdvanced,
+  HeadingSemanticValue,
+  SemanticStructureAnalysis,
+  AccessibilityFeatures,
+  ContentFlow,
+  StructureAnalysis,
+  ReadabilityAnalysis,
+  DensityAnalysis,
+  LinkAnalysis,
+  AccessibilityValidation,
+  LLMOptimization,
+  Recommendation,
+  ValidationResult
+};
+
+export default LLMFormattingAnalyzer; 
