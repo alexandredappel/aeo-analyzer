@@ -65,7 +65,7 @@ const SECTION_CONFIG = {
   id: 'structured-data',
   name: 'Structured Data',
   emoji: '📋',
-  description: 'Schema markup and metadata for search engines and AI',
+  description: 'Does your content have proper schema markup for AI understanding?',
   weightPercentage: 25,
   maxScore: 100
 };
@@ -747,7 +747,7 @@ export function analyzeStructuredData(html: string, url: string): StructuredData
       id: SECTION_CONFIG.id,
       name: SECTION_CONFIG.name,
       emoji: SECTION_CONFIG.emoji,
-      description: 'Analysis error occurred',
+      description: 'Does your content have proper schema markup for AI understanding?',
       weightPercentage: SECTION_CONFIG.weightPercentage,
       totalScore: 0,
       maxScore: SECTION_CONFIG.maxScore,

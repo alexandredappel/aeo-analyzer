@@ -81,7 +81,7 @@ const SECTION_CONFIG = {
   id: 'llm-formatting',
   name: 'LLM Formatting',
   emoji: '🤖',
-  description: 'AI-friendly structure and formatting analysis',
+  description: 'Is your content structured for optimal LLM parsing?',
   weightPercentage: 25,
   maxScore: 100
 };
@@ -1121,7 +1121,7 @@ export function analyzeLLMFormatting(html: string, url: string): LLMFormattingAn
       id: SECTION_CONFIG.id,
       name: SECTION_CONFIG.name,
       emoji: SECTION_CONFIG.emoji,
-      description: 'Analysis error occurred',
+      description: 'Is your content structured for optimal LLM parsing?',
       weightPercentage: SECTION_CONFIG.weightPercentage,
       totalScore: 0,
       maxScore: SECTION_CONFIG.maxScore,
