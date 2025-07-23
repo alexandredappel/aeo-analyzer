@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { MainSectionComponent } from '@/components/ui/analysis/MainSectionComponent';
 import { MainSection } from '@/types/analysis-architecture';
+import { AEOScoreDisplay } from '@/components/ui/AEOScoreDisplay';
 
 interface CollectionResult {
   success: boolean;
@@ -274,54 +275,6 @@ function BreakdownItem({ icon, label, score, maxScore, details }: BreakdownItemP
 
 
 
-function GlobalAEOScoreSection({ aeoScore, isLoading }: { aeoScore?: AEOScore; isLoading: boolean }) {
-  if (isLoading && !aeoScore) {
-    return (
-      <div className="bg-gray-800 border border-blue-700 rounded-lg p-6 mb-6 flex flex-col items-center">
-        <div className="w-12 h-12 bg-blue-500 rounded-full animate-pulse mb-4"></div>
-        <span className="text-blue-400 text-xl font-bold">Calculating global AEO score...</span>
-      </div>
-    );
-  }
-  if (!aeoScore) return null;
-
-  const { totalScore, maxScore, breakdown, completeness } = aeoScore;
-  const percentage = Math.round((totalScore / maxScore) * 100);
-
-  const items = [
-    { key: 'discoverability', label: 'Discoverability', color: getScoreColor(breakdown.discoverability.score, 100), value: breakdown.discoverability.score },
-            { key: 'structuredData', label: 'Structured', color: getScoreColor(breakdown.structuredData.score, 100), value: breakdown.structuredData.score },
-    { key: 'llmFormatting', label: 'Formatting', color: getScoreColor(breakdown.llmFormatting.score, 100), value: breakdown.llmFormatting.score },
-    { key: 'accessibility', label: 'Accessibility', color: getScoreColor(breakdown.accessibility.score, 100), value: breakdown.accessibility.score },
-    { key: 'readability', label: 'Readability', color: getScoreColor(breakdown.readability.score, 100), value: breakdown.readability.score },
-  ];
-
-  return (
-    <div className="bg-gray-800 border border-blue-700 rounded-lg p-6 mb-6">
-      <div className="flex flex-col items-center mb-4">
-        <span className="text-4xl md:text-5xl font-extrabold text-blue-400 mb-2 tracking-tight">
-          {totalScore}/{maxScore}
-        </span>
-        <div className="w-full bg-gray-600 rounded-full h-4 mb-2">
-          <div
-            className={`h-4 rounded-full transition-all duration-500 ${getProgressBarClass(totalScore, maxScore)}`}
-            style={{ width: `${percentage}%` }}
-          ></div>
-        </div>
-        <span className="text-sm text-gray-300 font-medium">{completeness}</span>
-      </div>
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mt-2">
-        {items.map(({ key, label, color, value }) => (
-          <div key={key} className="flex flex-col items-center bg-gray-700 rounded p-2">
-            <span className={`font-bold text-lg ${color}`}>{value}</span>
-            <span className="text-xs text-gray-400 font-medium">{label}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 export function CollectionResults({ data, analysisResults, isLoading, isAnalysisCompleted }: CollectionResultsProps) {
   // State management for hierarchical drawer expansion
   const [expandedDrawers, setExpandedDrawers] = useState<Set<string>>(new Set());
@@ -346,121 +299,11 @@ export function CollectionResults({ data, analysisResults, isLoading, isAnalysis
   return (
     <div className="space-y-6">
       {/* Global AEO Score Section */}
-      <GlobalAEOScoreSection
+      <AEOScoreDisplay
         aeoScore={analysisResults?.aeoScore}
         isLoading={isLoading && !analysisResults?.aeoScore}
       />
-      {/* Data Collection Results */}
-      <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-        <h3 className="text-lg font-semibold text-gray-200 mb-4">
-          📊 Data Collection Results
-        </h3>
-
-      {isLoading ? (
-        <div className="space-y-3">
-          {['HTML Content', 'Robots.txt', 'Sitemap.xml'].map((item) => (
-            <div key={item} className="flex items-center gap-3 p-3 bg-gray-700 rounded border border-gray-600">
-              <div className="w-4 h-4 bg-gray-500 rounded animate-pulse"></div>
-              <span className="text-gray-300">{item}: Checking...</span>
-            </div>
-          ))}
-        </div>
-      ) : data ? (
-        <div className="space-y-3">
-          {/* HTML Content */}
-          <div className="flex items-center gap-3 p-3 bg-gray-700 rounded border border-gray-600">
-            <StatusIcon success={data.html.success} error={data.html.error} />
-            <div className="flex-1">
-              <span className="text-gray-200 font-medium">HTML Content:</span>
-              {data.html.success ? (
-                <span className="text-green-400 ml-2">
-                  Retrieved ({data.html.metadata?.contentLength ? formatBytes(data.html.metadata.contentLength) : 'Unknown size'})
-                </span>
-              ) : (
-                <span className="text-red-400 ml-2">
-                  Failed ({data.html.error || 'Unknown error'})
-                </span>
-              )}
-            </div>
-            {data.html.metadata?.responseTime && (
-              <span className="text-gray-400 text-sm">
-                {data.html.metadata.responseTime}ms
-              </span>
-            )}
-          </div>
-
-          {/* Robots.txt */}
-          <div className="flex items-center gap-3 p-3 bg-gray-700 rounded border border-gray-600">
-            <StatusIcon success={data.robotsTxt.success} error={data.robotsTxt.error} />
-            <div className="flex-1">
-              <span className="text-gray-200 font-medium">Robots.txt:</span>
-              {data.robotsTxt.success ? (
-                <span className="text-green-400 ml-2">
-                  Found ({data.robotsTxt.metadata?.contentLength ? formatBytes(data.robotsTxt.metadata.contentLength) : 'Unknown size'})
-                </span>
-              ) : data.robotsTxt.error?.includes('not found') ? (
-                <span className="text-yellow-400 ml-2">Not Found (acceptable)</span>
-              ) : (
-                <span className="text-red-400 ml-2">
-                  Error ({data.robotsTxt.error || 'Unknown error'})
-                </span>
-              )}
-            </div>
-            {data.robotsTxt.metadata?.responseTime && (
-              <span className="text-gray-400 text-sm">
-                {data.robotsTxt.metadata.responseTime}ms
-              </span>
-            )}
-          </div>
-
-          {/* Sitemap */}
-          <div className="flex items-center gap-3 p-3 bg-gray-700 rounded border border-gray-600">
-            <StatusIcon success={data.sitemap.success} error={data.sitemap.error} />
-            <div className="flex-1">
-              <span className="text-gray-200 font-medium">Sitemap.xml:</span>
-              {data.sitemap.success ? (
-                <span className="text-green-400 ml-2">
-                  Found ({data.sitemap.metadata?.contentLength ? formatBytes(data.sitemap.metadata.contentLength) : 'Unknown size'})
-                </span>
-              ) : data.sitemap.error?.includes('not found') ? (
-                <span className="text-yellow-400 ml-2">Not Found (acceptable)</span>
-              ) : (
-                <span className="text-red-400 ml-2">
-                  Error ({data.sitemap.error || 'Unknown error'})
-                </span>
-              )}
-            </div>
-            {data.sitemap.metadata?.responseTime && (
-              <span className="text-gray-400 text-sm">
-                {data.sitemap.metadata.responseTime}ms
-              </span>
-            )}
-          </div>
-
-          {/* Basic Metadata */}
-          {data.metadata?.basic && (
-            <div className="mt-4 p-3 bg-gray-700 rounded border border-gray-600">
-              <h4 className="text-gray-200 font-medium mb-2">📝 Basic Metadata:</h4>
-              <div className="space-y-1 text-sm">
-                {data.metadata.basic.title && (
-                  <div><span className="text-gray-400">Title:</span> <span className="text-gray-200">{data.metadata.basic.title}</span></div>
-                )}
-                {data.metadata.basic.description && (
-                  <div><span className="text-gray-400">Description:</span> <span className="text-gray-200">{data.metadata.basic.description}</span></div>
-                )}
-                {data.metadata.basic.charset && (
-                  <div><span className="text-gray-400">Charset:</span> <span className="text-gray-200">{data.metadata.basic.charset}</span></div>
-                )}
-                {data.metadata.basic.viewport && (
-                  <div><span className="text-gray-400">Viewport:</span> <span className="text-gray-200">{data.metadata.basic.viewport}</span></div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-      ) : null}
-      </div>
-
+      
       {/* New Hierarchical Discoverability Section */}
       {isAnalysisCompleted && analysisResults?.discoverability && (
         <MainSectionComponent

@@ -55,14 +55,10 @@ export const MainSectionComponent: React.FC<MainSectionComponentProps> = ({
             </div>
           </div>
 
-          {/* Partie droite - Score et pourcentage */}
+          {/* Partie droite - Score uniquement */}
           <div className="text-right ml-6">
             <div className="text-3xl font-bold text-white mb-1">
-              {section.totalScore}<span className="text-lg text-gray-400">/{section.maxScore}</span>
-            </div>
-            <div className="text-lg text-gray-400 mb-1">{scorePercentage}%</div>
-            <div className="text-sm text-blue-400 font-medium">
-              Poids: {section.weightPercentage}%
+              {Math.round(section.totalScore)}<span className="text-lg text-gray-400">/{section.maxScore}</span>
             </div>
           </div>
         </div>
@@ -89,7 +85,7 @@ export const MainSectionComponent: React.FC<MainSectionComponentProps> = ({
       </div>
 
       {/* Liste des tiroirs */}
-      <div className="p-6">
+      <div className="p-3">
         {section.drawers.length > 0 ? (
           <div className="space-y-4">
             {section.drawers.map((drawer) => (
@@ -108,30 +104,6 @@ export const MainSectionComponent: React.FC<MainSectionComponentProps> = ({
             <p>Les métriques pour {section.name} seront bientôt disponibles.</p>
           </div>
         )}
-      </div>
-
-      {/* Actions rapides (optionnel) */}
-      <div className="px-6 pb-6">
-        <div className="flex gap-2 justify-end">
-          <button
-            onClick={() => {
-              // Expand all drawers
-              setExpandedDrawers(new Set(section.drawers.map(d => d.id)));
-            }}
-            className="px-3 py-1 text-xs text-blue-400 hover:text-blue-300 transition-colors"
-          >
-            Tout développer
-          </button>
-          <button
-            onClick={() => {
-              // Collapse all drawers
-              setExpandedDrawers(new Set());
-            }}
-            className="px-3 py-1 text-xs text-gray-400 hover:text-gray-300 transition-colors"
-          >
-            Tout réduire
-          </button>
-        </div>
       </div>
     </div>
   );

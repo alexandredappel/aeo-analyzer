@@ -153,47 +153,32 @@ function ReportContent() {
         </div>
       </div>
 
-      {/* URL Display */}
+      {/* URL Display avec métadonnées */}
       <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 mb-3">
           <h2 className="text-lg font-semibold text-gray-200">Analysis for:</h2>
           <div className="flex items-center gap-2">
             {isLoading && <LoadingSpinner size="sm" />}
             <p className="text-blue-400 font-mono text-sm break-all">{decodedUrl}</p>
           </div>
         </div>
-        
-        {/* Analysis status */}
-        <div className="mt-3 flex items-center gap-2">
-          <span className="text-gray-400">Status:</span>
-          {analysisState === 'idle' && (
-            <span className="text-yellow-400 flex items-center gap-2">
-              <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></div>
-              Starting analysis...
-            </span>
-          )}
-          {analysisState === 'running' && (
-            <span className="text-blue-400 flex items-center gap-2">
-              <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
-              Analysis in progress...
-            </span>
-          )}
-          {analysisState === 'completed' && (
-            <span className="text-green-400 flex items-center gap-2">
-              ✅ Analysis completed
-              {summary && (
-                <span className="text-gray-400 text-sm">
-                  ({summary.successCount}/{summary.successCount + summary.failureCount} successful, {summary.totalTime}ms)
-                </span>
-              )}
-            </span>
-          )}
-          {analysisState === 'error' && (
-            <span className="text-red-400 flex items-center gap-2">
-              ❌ Analysis failed
-            </span>
-          )}
-        </div>
+        {/* Meta Title and Description */}
+        {collectionResults?.metadata?.basic && (
+          <div className="space-y-2 mb-3 pl-6 border-l-2 border-gray-600">
+            {collectionResults.metadata.basic.title && (
+              <div className="text-sm">
+                <span className="text-gray-400">Title:</span> 
+                <span className="text-gray-200 ml-2">{collectionResults.metadata.basic.title}</span>
+              </div>
+            )}
+            {collectionResults.metadata.basic.description && (
+              <div className="text-sm">
+                <span className="text-gray-400">Description:</span> 
+                <span className="text-gray-200 ml-2">{collectionResults.metadata.basic.description}</span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Error handling for connection issues */}
@@ -231,7 +216,7 @@ function ReportContent() {
       )}
 
       {/* Real-time analysis logs */}
-      <AnalysisLogs logs={logs} isRunning={isLoading} />
+      {/* <AnalysisLogs logs={logs} isRunning={isLoading} /> */}
 
       {/* Collection results */}
       <CollectionResults 
@@ -242,9 +227,9 @@ function ReportContent() {
       />
 
       {/* Analysis summary */}
-      {isCompleted && summary && (
+      {/* {isCompleted && summary && (
         <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-          <h3 className="text-lg font-semibold text-gray-200 mb-3">📈 Analysis Summary</h3>
+          <h3 className="text-lg font-semibold text-gray-200 mb-3"> 4c8 Analysis Summary</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
             <div className="p-3 bg-gray-700 rounded">
               <div className="text-2xl font-bold text-blue-400">{summary.totalTime}ms</div>
@@ -266,14 +251,14 @@ function ReportContent() {
             </div>
           </div>
         </div>
-      )}
+      )} */}
 
       {/* Next steps placeholder */}
-      {isCompleted && (
+      {/* {isCompleted && (
         <div className="bg-blue-900/20 border border-blue-700 rounded-lg p-6 text-center">
           <div className="space-y-3">
             <div className="w-12 h-12 mx-auto bg-blue-500/20 rounded-full flex items-center justify-center">
-              <span className="text-xl">⚡</span>
+              <span className="text-xl"> 6a1</span>
             </div>
             <h3 className="text-lg font-semibold text-blue-400">
               Data collection complete!
@@ -284,7 +269,7 @@ function ReportContent() {
             </p>
           </div>
         </div>
-      )}
+      )} */}
     </div>
   );
 }
