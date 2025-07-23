@@ -1,27 +1,21 @@
 /**
- * Discoverability Analyzer for AEO Auditor
- * Analyzes website discoverability for AI search engines
+ * DISCOVERABILITY ANALYZER - PHASE 2: NEW HIERARCHICAL ARCHITECTURE
  * 
- * Scoring Criteria (100 points total):
- * - HTTPS Protocol: 25 points
- * - HTTP Status: 25 points  
- * - Robots.txt AI Bots: 30 points
- * - Sitemap Present: 20 points
+ * Analyzes discoverability for search engines and AI (20% of total score)
+ * Architecture: 🔍 DISCOVERABILITY → Foundation + AI Access → MetricCards
+ * 
+ * GLOBAL PENALTY: Robots.txt blocking AI bots affects the final global score
  */
 
-// Types and interfaces
-interface AnalysisResult {
-  score: number;
-  status: 'pass' | 'partial' | 'fail';
-  message: string;
-}
+import { 
+  MetricCard, 
+  DrawerSubSection, 
+  MainSection, 
+  GlobalPenalty, 
+  PerformanceStatus 
+} from '@/types/analysis-architecture';
 
-interface RobotRules {
-  [userAgent: string]: {
-    allows: string[];
-    disallows: string[];
-  };
-}
+// ===== INTERFACES AND TYPES =====
 
 interface CollectedData {
   url: string;
@@ -40,96 +34,67 @@ interface CollectedData {
   sitemap?: {
     success: boolean;
     error?: string;
+    data?: string;
   };
 }
 
-interface DiscoverabilityBreakdown {
-  https: AnalysisResult;
-  httpStatus: AnalysisResult;
-  robotsAiBots: AnalysisResult;
-  sitemap: AnalysisResult;
+interface RobotRules {
+  [userAgent: string]: {
+    allows: string[];
+    disallows: string[];
+  };
 }
 
-interface DiscoverabilityResult {
-  category: string;
-  score: number;
-  maxScore: number;
-  breakdown: DiscoverabilityBreakdown;
-  recommendations: string[];
-  error?: string;
+interface DiscoverabilityAnalysisResult {
+  section: MainSection;
+  globalPenalties: GlobalPenalty[];
+  rawData: {
+    httpsEnabled: boolean;
+    httpStatusCode: number;
+    robotsContent: string;
+    sitemapPresent: boolean;
+    blockedAIBots: string[];
+    allowedAIBots: string[];
+    error?: string;
+  };
 }
 
-// AI bots to check in robots.txt
+// ===== CONSTANTS =====
+
 const AI_BOTS: string[] = [
   'GPTBot',
   'Google-Extended', 
   'ChatGPT-User',
-  'CCBot',
   'anthropic-ai',
   'Claude-Web',
-  'PerplexityBot'
+  'PerplexityBot',
+  'CCBot'
 ];
 
+const SECTION_CONFIG = {
+  id: 'discoverability',
+  name: 'Discoverability',
+  emoji: '🔍',
+  description: 'Visibility and accessibility for search engines and AI',
+  weightPercentage: 20,
+  maxScore: 100
+};
+
+// ===== UTILITIES =====
+
 /**
- * Analyzes HTTPS protocol usage
- * @param url - The website URL
- * @returns Analysis result with score and details
+ * Determines performance status based on score
  */
-function analyzeHttps(url: string): AnalysisResult {
-  try {
-    const urlObj = new URL(url);
-    const isHttps = urlObj.protocol === 'https:';
-    
-    return {
-      score: isHttps ? 25 : 0,
-      status: isHttps ? 'pass' : 'fail',
-      message: isHttps ? 'HTTPS enabled' : 'HTTP only - upgrade to HTTPS recommended'
-    };
-  } catch (error) {
-    return {
-      score: 0,
-      status: 'fail',
-      message: 'Invalid URL format'
-    };
-  }
+function getPerformanceStatus(score: number, maxScore: number): PerformanceStatus {
+  const percentage = (score / maxScore) * 100;
+  if (percentage >= 90) return 'excellent';
+  if (percentage >= 70) return 'good';
+  if (percentage >= 50) return 'warning';
+  return 'error';
 }
 
 /**
- * Analyzes HTTP status code
- * @param htmlData - HTML collection data with metadata
- * @returns Analysis result with score and details
- */
-function analyzeHttpStatus(htmlData: CollectedData['html']): AnalysisResult {
-  try {
-    if (!htmlData?.success) {
-      return {
-        score: 0,
-        status: 'fail',
-        message: `HTTP error: ${htmlData?.error || 'Unknown error'}`
-      };
-    }
-    
-    const statusCode = htmlData.metadata?.statusCode || 200;
-    const isSuccessful = statusCode >= 200 && statusCode < 300;
-    
-    return {
-      score: isSuccessful ? 25 : 0,
-      status: isSuccessful ? 'pass' : 'fail',
-      message: isSuccessful ? `Returns ${statusCode} OK` : `HTTP ${statusCode} error`
-    };
-  } catch (error) {
-    return {
-      score: 0,
-      status: 'fail',
-      message: 'Unable to determine HTTP status'
-    };
-  }
-}
-
-/**
- * Parses robots.txt content to extract rules for specific user agents
- * @param robotsContent - Raw robots.txt content
- * @returns Parsed rules by user agent
+ * Parses robots.txt content into structured rules
  */
 function parseRobotsTxt(robotsContent: string): RobotRules {
   const rules: RobotRules = {};
@@ -158,255 +123,457 @@ function parseRobotsTxt(robotsContent: string): RobotRules {
 }
 
 /**
- * Checks if a specific bot is allowed based on robots.txt rules
- * @param rules - Parsed robots.txt rules
- * @param botName - Name of the bot to check
- * @returns True if bot is allowed
+ * Checks if an AI bot is allowed according to robots.txt
  */
 function isBotAllowed(rules: RobotRules, botName: string): boolean {
   const botNameLower = botName.toLowerCase();
   
-  // Check specific bot rules first
+  // Check bot-specific rules
   if (rules[botNameLower]) {
     const botRules = rules[botNameLower];
-    // If explicitly disallowed from root, bot is blocked
     if (botRules.disallows.includes('/')) return false;
-    // If explicitly allowed or no disallow rules, bot is allowed
     return true;
   }
   
   // Check wildcard rules (User-agent: *)
   if (rules['*']) {
     const wildcardRules = rules['*'];
-    // If wildcard disallows root, bot is blocked unless specifically allowed
     if (wildcardRules.disallows.includes('/')) return false;
-    // If wildcard allows or no disallow rules, bot is allowed
     return true;
   }
   
-  // If no rules found, assume allowed (permissive default)
+  // Default to allowed if no rules found
   return true;
 }
 
+// ===== METRIC ANALYZERS =====
+
 /**
- * Analyzes robots.txt for AI bot accessibility
- * @param robotsData - Robots.txt collection data
- * @returns Analysis result with score and details
+ * Analyzes HTTPS protocol (25 points)
  */
-function analyzeRobotsAiBots(robotsData: CollectedData['robotsTxt']): AnalysisResult {
+function analyzeHTTPS(url: string): MetricCard {
   try {
-    // If robots.txt is missing
-    if (!robotsData?.success) {
-      return {
-        score: 0,
-        status: 'fail',
-        message: 'No robots.txt found - AI bots may have limited access'
-      };
+    const urlObj = new URL(url);
+    const isHttps = urlObj.protocol === 'https:';
+    
+    return {
+      id: 'https-protocol',
+      name: 'HTTPS Protocol',
+      score: isHttps ? 25 : 0,
+      maxScore: 25,
+      status: getPerformanceStatus(isHttps ? 25 : 0, 25),
+      explanation: "HTTPS protocol encrypts data between browser and server, improving security and trust. Google and AI engines prioritize HTTPS sites in their rankings.",
+      problems: isHttps ? [] : [
+        "Your site uses HTTP instead of HTTPS",
+        "Data is not encrypted in transit",
+        "Negative impact on SEO rankings",
+        "Loss of trust from users and AI crawlers"
+      ],
+      solutions: isHttps ? [
+        "Excellent! Your site uses HTTPS",
+        "Ensure all internal links use HTTPS",
+        "Check for mixed content (HTTP/HTTPS)"
+      ] : [
+        "Install a valid SSL/TLS certificate",
+        "Configure automatic HTTP → HTTPS redirection",
+        "Update all internal links to HTTPS",
+        "Add HSTS (HTTP Strict Transport Security)"
+      ],
+      successMessage: "Great! Your site uses HTTPS protocol for secure connections.",
+      rawData: {
+        protocol: urlObj.protocol,
+        isSecure: isHttps
+      }
+    };
+  } catch (error) {
+    return {
+      id: 'https-protocol',
+      name: 'HTTPS Protocol',
+      score: 0,
+      maxScore: 25,
+      status: 'error',
+      explanation: "HTTPS protocol is essential for security and SEO.",
+      problems: ["Invalid or inaccessible URL"],
+      solutions: ["Verify the provided URL is valid"],
+      successMessage: "Great! Your site uses HTTPS protocol for secure connections.",
+      rawData: { error: (error as Error).message }
+    };
+  }
+}
+
+/**
+ * Analyzes HTTP status (25 points)
+ */
+function analyzeHTTPStatus(htmlData: CollectedData['html']): MetricCard {
+  const statusCode = htmlData?.metadata?.statusCode || 0;
+  let score = 0;
+  let problems: string[] = [];
+  let solutions: string[] = [];
+
+  if (!htmlData?.success) {
+    problems = [
+      "Cannot access the page",
+      htmlData?.error || "Unknown connection error",
+      "AI crawlers cannot analyze the content"
+    ];
+    solutions = [
+      "Verify web server is running correctly",
+      "Check DNS configuration",
+      "Test accessibility from different networks"
+    ];
+  } else if (statusCode >= 200 && statusCode < 300) {
+    score = 25;
+    solutions = [
+      "Perfect! Your page returns a success code",
+      "Maintain server availability",
+      "Monitor loading performance"
+    ];
+  } else if (statusCode >= 300 && statusCode < 400) {
+    score = 15;
+    problems = [
+      `Redirection detected (${statusCode})`,
+      "Redirections can slow down indexing",
+      "Potentially problematic redirect chains"
+    ];
+    solutions = [
+      "Use 301 redirects for permanent changes",
+      "Avoid multiple redirect chains",
+      "Update internal links to final URL"
+    ];
+  } else if (statusCode >= 400 && statusCode < 500) {
+    problems = [
+      `Client error detected (${statusCode})`,
+      "Page is not accessible to crawlers",
+      "Negative impact on indexing and SEO"
+    ];
+    solutions = [
+      "Fix URL or restore missing content",
+      "Check access permissions",
+      "Redirect to existing page if appropriate"
+    ];
+  } else if (statusCode >= 500) {
+    problems = [
+      `Server error detected (${statusCode})`,
+      "Server issue preventing access",
+      "Unavailable to search engines and AI"
+    ];
+    solutions = [
+      "Diagnose and fix server error",
+      "Check server error logs",
+      "Contact hosting provider if necessary"
+    ];
+  }
+
+  return {
+    id: 'http-status',
+    name: 'HTTP Status',
+    score,
+    maxScore: 25,
+    status: getPerformanceStatus(score, 25),
+    explanation: "HTTP status code indicates if your page is accessible to crawlers. A 200 (success) status is optimal for indexing by search engines and AI.",
+    problems,
+    solutions,
+    successMessage: "Perfect! Your site returns a valid HTTP 200 status code.",
+    rawData: {
+      statusCode,
+      success: htmlData?.success || false,
+      error: htmlData?.error
     }
+  };
+}
+
+/**
+ * Analyzes AI bots access (30 points) - GLOBAL PENALTY SOURCE
+ */
+function analyzeRobotsAIBots(robotsData: CollectedData['robotsTxt']): { 
+  card: MetricCard; 
+  globalPenalty?: GlobalPenalty 
+} {
+  let score = 0;
+  let problems: string[] = [];
+  let solutions: string[] = [];
+  let blockedBots: string[] = [];
+  let allowedBots: string[] = [];
+  let globalPenalty: GlobalPenalty | undefined;
+
+  if (!robotsData?.success) {
+    score = 0;
+    problems = [
+      "Robots.txt file not found",
+      "AI bots may have unpredictable access",
+      "Risk of default blocking by some crawlers"
+    ];
+    solutions = [
+      "Create robots.txt file at site root",
+      "Explicitly allow important AI bots",
+      "Test accessibility with Google Search Console"
+    ];
+  } else {
+    const robotsContent = robotsData.data || '';
     
-    const robotsContent = robotsData.data;
-    
-    // If robots.txt is empty, assume permissive (all bots allowed)
-    if (!robotsContent || robotsContent.trim() === '') {
-      return {
-        score: 30,
-        status: 'pass',
-        message: 'Empty robots.txt - all AI bots allowed'
-      };
-    }
-    
-    const rules = parseRobotsTxt(robotsContent);
-    let allowedBots = 0;
-    let blockedBots: string[] = [];
-    
-    // Check each AI bot
-    for (const bot of AI_BOTS) {
-      if (isBotAllowed(rules, bot)) {
-        allowedBots++;
+    if (robotsContent.trim() === '') {
+      score = 30;
+      allowedBots = [...AI_BOTS];
+      solutions = [
+        "Excellent! Empty robots.txt = access allowed for all bots",
+        "Consider adding specific rules if necessary",
+        "Monitor crawler activity"
+      ];
+    } else {
+      const rules = parseRobotsTxt(robotsContent);
+      
+      for (const bot of AI_BOTS) {
+        if (isBotAllowed(rules, bot)) {
+          allowedBots.push(bot);
+        } else {
+          blockedBots.push(bot);
+        }
+      }
+      
+      const allowedPercentage = allowedBots.length / AI_BOTS.length;
+      score = Math.round(30 * allowedPercentage);
+      
+      if (blockedBots.length > 0) {
+        problems = [
+          `${blockedBots.length}/${AI_BOTS.length} AI bots blocked by robots.txt`,
+          `Blocked bots: ${blockedBots.join(', ')}`,
+          "Reduced visibility in AI search results"
+        ];
+        
+        solutions = [
+          "Modify robots.txt to allow AI bots",
+          "Use 'Allow: /' for specific AI User-agents",
+          "Avoid 'Disallow: /' in global rules"
+        ];
+
+        // GLOBAL PENALTY CALCULATION
+        const blockedPercentage = blockedBots.length / AI_BOTS.length;
+        let penaltyFactor = 0;
+        
+        if (blockedPercentage >= 1.0) {
+          // All bots blocked = 70% penalty
+          penaltyFactor = 0.7;
+        } else if (blockedPercentage > 0.5) {
+          // More than 50% blocked = 40% penalty
+          penaltyFactor = 0.4;
+        }
+        
+        if (penaltyFactor > 0) {
+          globalPenalty = {
+            type: 'robots_txt_blocking',
+            description: `Robots.txt blocks ${blockedBots.length}/${AI_BOTS.length} major AI bots`,
+            penaltyFactor,
+            details: [
+              `Blocked bots: ${blockedBots.join(', ')}`,
+              `Blocked percentage: ${Math.round(blockedPercentage * 100)}%`,
+              `Impact on final score: -${Math.round(penaltyFactor * 100)}%`
+            ],
+            solutions: [
+              "Allow AI bots in robots.txt",
+              "Use 'Allow: /' for GPTBot, Claude-Web, etc.",
+              "Avoid global blocking with 'User-agent: *' and 'Disallow: /'"
+            ]
+          };
+        }
       } else {
-        blockedBots.push(bot);
+        solutions = [
+          "Perfect! All AI bots have access to your content",
+          "Maintain this configuration to optimize AEO",
+          "Monitor emerging AI bots"
+        ];
       }
     }
-    
-    const allowedPercentage = allowedBots / AI_BOTS.length;
-    const score = Math.round(30 * allowedPercentage);
-    
-    let status: 'pass' | 'partial' | 'fail';
-    let message: string;
-    
-    if (allowedBots === AI_BOTS.length) {
-      status = 'pass';
-      message = 'All AI bots allowed in robots.txt';
-    } else if (allowedBots > 0) {
-      status = 'partial';
-      message = `${allowedBots}/${AI_BOTS.length} AI bots allowed. Blocked: ${blockedBots.join(', ')}`;
-    } else {
-      status = 'fail';
-      message = 'All AI bots blocked by robots.txt';
-    }
-    
-    return { score, status, message };
-    
-  } catch (error) {
-    return {
-      score: 0,
-      status: 'fail',
-      message: 'Error parsing robots.txt'
-    };
   }
+
+  const card: MetricCard = {
+    id: 'ai-bots-access',
+    name: 'AI Bots Access',
+    score,
+    maxScore: 30,
+    status: getPerformanceStatus(score, 30),
+    explanation: "AI bot access to your content is crucial for AEO. Robots.txt blocking these bots drastically reduces your visibility in AI responses and can penalize your entire AEO score.",
+    problems,
+    solutions,
+    successMessage: "Excellent! All AI bots can access your content for better AEO.",
+    rawData: {
+      robotsContent: robotsData?.data || '',
+      blockedBots,
+      allowedBots,
+      totalBots: AI_BOTS.length
+    }
+  };
+
+  return { card, globalPenalty };
 }
 
 /**
- * Analyzes sitemap presence
- * @param sitemapData - Sitemap collection data
- * @returns Analysis result with score and details
+ * Analyzes sitemap quality (20 points)
  */
-function analyzeSitemap(sitemapData: CollectedData['sitemap']): AnalysisResult {
+function analyzeSitemapQuality(sitemapData: CollectedData['sitemap']): MetricCard {
+  let score = 0;
+  let problems: string[] = [];
+  let solutions: string[] = [];
+
+  if (!sitemapData?.success) {
+    problems = [
+      "XML sitemap file not found",
+      "Crawlers cannot discover all pages",
+      "Slower and less complete indexing"
+    ];
+    solutions = [
+      "Create XML sitemap file at site root",
+      "Auto-generate sitemap with your CMS",
+      "Submit sitemap via Google Search Console",
+      "Add sitemap reference in robots.txt"
+    ];
+  } else {
+    score = 20;
+    solutions = [
+      "Excellent! XML sitemap detected",
+      "Maintain sitemap automatically",
+      "Include all important pages",
+      "Verify XML validity periodically"
+    ];
+    
+    // TODO: Analyze sitemap content for more precise scoring
+    // - Number of URLs
+    // - Freshness of modification dates
+    // - XML validity
+  }
+
+  return {
+    id: 'sitemap-quality',
+    name: 'Sitemap Quality',
+    score,
+    maxScore: 20,
+    status: getPerformanceStatus(score, 20),
+    explanation: "XML sitemap helps search engines and AI discover and understand your site structure. It accelerates indexing and improves content coverage.",
+    problems,
+    solutions,
+    successMessage: "Great! Your sitemap is properly configured and accessible.",
+    rawData: {
+      sitemapFound: sitemapData?.success || false,
+      error: sitemapData?.error,
+      content: sitemapData?.data
+    }
+  };
+}
+
+// ===== MAIN ANALYZER =====
+
+/**
+ * Complete discoverability analysis according to new architecture
+ */
+export function analyzeDiscoverability(collectedData: CollectedData): DiscoverabilityAnalysisResult {
   try {
-    if (sitemapData?.success) {
-      return {
-        score: 20,
-        status: 'pass',
-        message: 'XML sitemap found'
-      };
-    } else {
-      return {
-        score: 0,
-        status: 'fail',
-        message: 'No XML sitemap found'
-      };
+    // Input data validation
+    if (!collectedData?.url) {
+      throw new Error('URL required for discoverability analysis');
     }
+
+    // Individual metric analyses
+    const httpsCard = analyzeHTTPS(collectedData.url);
+    const httpStatusCard = analyzeHTTPStatus(collectedData.html);
+    const { card: aiBotsCard, globalPenalty } = analyzeRobotsAIBots(collectedData.robotsTxt);
+    const sitemapCard = analyzeSitemapQuality(collectedData.sitemap);
+
+    // Build drawers (DrawerSubSection)
+    const foundationDrawer: DrawerSubSection = {
+      id: 'foundation',
+      name: 'Technical Foundation',
+      description: 'HTTPS protocol and basic accessibility',
+      totalScore: httpsCard.score + httpStatusCard.score,
+      maxScore: 50,
+      status: getPerformanceStatus(httpsCard.score + httpStatusCard.score, 50),
+      cards: [httpsCard, httpStatusCard]
+    };
+
+    const aiAccessDrawer: DrawerSubSection = {
+      id: 'ai-access',
+      name: 'AI Access',
+      description: 'Accessibility for AI engines and crawlers',
+      totalScore: aiBotsCard.score + sitemapCard.score,
+      maxScore: 50,
+      status: getPerformanceStatus(aiBotsCard.score + sitemapCard.score, 50),
+      cards: [aiBotsCard, sitemapCard]
+    };
+
+    // Total section score
+    const totalScore = foundationDrawer.totalScore + aiAccessDrawer.totalScore;
+
+    // Build main section
+    const section: MainSection = {
+      id: SECTION_CONFIG.id,
+      name: SECTION_CONFIG.name,
+      emoji: SECTION_CONFIG.emoji,
+      description: SECTION_CONFIG.description,
+      weightPercentage: SECTION_CONFIG.weightPercentage,
+      totalScore,
+      maxScore: SECTION_CONFIG.maxScore,
+      status: getPerformanceStatus(totalScore, SECTION_CONFIG.maxScore),
+      drawers: [foundationDrawer, aiAccessDrawer]
+    };
+
+    // Raw data for debug/export
+    const rawData = {
+      httpsEnabled: collectedData.url.startsWith('https://'),
+      httpStatusCode: collectedData.html?.metadata?.statusCode || 0,
+      robotsContent: collectedData.robotsTxt?.data || '',
+      sitemapPresent: collectedData.sitemap?.success || false,
+      blockedAIBots: aiBotsCard.rawData?.blockedBots || [],
+      allowedAIBots: aiBotsCard.rawData?.allowedBots || []
+    };
+
+    return {
+      section,
+      globalPenalties: globalPenalty ? [globalPenalty] : [],
+      rawData
+    };
+
   } catch (error) {
+    // Error handling with minimal section
+    const errorSection: MainSection = {
+      id: SECTION_CONFIG.id,
+      name: SECTION_CONFIG.name,
+      emoji: SECTION_CONFIG.emoji,
+      description: 'Analysis error occurred',
+      weightPercentage: SECTION_CONFIG.weightPercentage,
+      totalScore: 0,
+      maxScore: SECTION_CONFIG.maxScore,
+      status: 'error',
+      drawers: []
+    };
+
     return {
-      score: 0,
-      status: 'fail',
-      message: 'Error checking sitemap'
+      section: errorSection,
+      globalPenalties: [],
+      rawData: {
+        httpsEnabled: false,
+        httpStatusCode: 0,
+        robotsContent: '',
+        sitemapPresent: false,
+        blockedAIBots: [],
+        allowedAIBots: [],
+        error: (error as Error).message
+      }
     };
   }
 }
 
-/**
- * Generates recommendations based on analysis results
- * @param breakdown - Analysis breakdown by category
- * @returns Array of recommendation strings
- */
-function generateRecommendations(breakdown: DiscoverabilityBreakdown): string[] {
-  const recommendations: string[] = [];
-  
-  // HTTPS recommendations
-  if (breakdown.https.status === 'pass') {
-    recommendations.push('✅ Great! Your site uses HTTPS for secure connections');
-  } else {
-    recommendations.push('❌ Upgrade to HTTPS to improve security and SEO rankings');
-  }
-  
-  // HTTP Status recommendations
-  if (breakdown.httpStatus.status === 'pass') {
-    recommendations.push('✅ Website is accessible and returns successful HTTP status');
-  } else {
-    recommendations.push('❌ Fix HTTP errors to ensure your site is accessible to crawlers');
-  }
-  
-  // Robots.txt AI bots recommendations
-  if (breakdown.robotsAiBots.status === 'pass') {
-    recommendations.push('✅ AI search engines can access your content via robots.txt');
-  } else if (breakdown.robotsAiBots.status === 'partial') {
-    recommendations.push('⚠️ Consider allowing blocked AI bots in robots.txt for better AEO');
-  } else {
-    recommendations.push('❌ Add robots.txt or allow AI bots to improve discoverability');
-  }
-  
-  // Sitemap recommendations
-  if (breakdown.sitemap.status === 'pass') {
-    recommendations.push('✅ XML sitemap helps search engines understand your content structure');
-  } else {
-    recommendations.push('❌ Add an XML sitemap to improve content discoverability');
-  }
-  
-  return recommendations;
-}
+// ===== EXPORTS =====
 
-/**
- * Main discoverability analysis function
- * @param collectedData - Data collected from crawler service
- * @returns Complete discoverability analysis with score and recommendations
- */
-export function analyzeDiscoverability(collectedData: CollectedData): DiscoverabilityResult {
-  try {
-    // Validate input
-    if (!collectedData || typeof collectedData !== 'object') {
-      throw new Error('Invalid collected data provided');
-    }
-    
-    const { url, html, robotsTxt, sitemap } = collectedData;
-    
-    if (!url) {
-      throw new Error('URL is required for discoverability analysis');
-    }
-    
-    // Perform individual analyses
-    const httpsAnalysis = analyzeHttps(url);
-    const httpStatusAnalysis = analyzeHttpStatus(html);
-    const robotsAnalysis = analyzeRobotsAiBots(robotsTxt);
-    const sitemapAnalysis = analyzeSitemap(sitemap);
-    
-    // Calculate total score
-    const totalScore = httpsAnalysis.score + httpStatusAnalysis.score + 
-                      robotsAnalysis.score + sitemapAnalysis.score;
-    
-    // Build breakdown
-    const breakdown: DiscoverabilityBreakdown = {
-      https: httpsAnalysis,
-      httpStatus: httpStatusAnalysis,
-      robotsAiBots: robotsAnalysis,
-      sitemap: sitemapAnalysis
-    };
-    
-    // Generate recommendations
-    const recommendations = generateRecommendations(breakdown);
-    
-    return {
-      category: 'discoverability',
-      score: totalScore,
-      maxScore: 100,
-      breakdown,
-      recommendations
-    };
-    
-  } catch (error) {
-    // Return error state with minimal score
-    return {
-      category: 'discoverability',
-      score: 0,
-      maxScore: 100,
-      breakdown: {
-        https: { score: 0, status: 'fail', message: 'Analysis error' },
-        httpStatus: { score: 0, status: 'fail', message: 'Analysis error' },
-        robotsAiBots: { score: 0, status: 'fail', message: 'Analysis error' },
-        sitemap: { score: 0, status: 'fail', message: 'Analysis error' }
-      },
-      recommendations: [`❌ Analysis failed: ${(error as Error).message}`],
-      error: (error as Error).message
-    };
-  }
-}
-
-// Export helper functions for testing and external use
 export {
-  analyzeHttps,
-  analyzeHttpStatus,
-  analyzeRobotsAiBots,
-  analyzeSitemap,
+  AI_BOTS,
   parseRobotsTxt,
   isBotAllowed,
-  AI_BOTS
+  analyzeHTTPS,
+  analyzeHTTPStatus,
+  analyzeRobotsAIBots,
+  analyzeSitemapQuality
 };
 
-// Export types for external use
 export type {
-  DiscoverabilityResult,
-  DiscoverabilityBreakdown,
-  AnalysisResult,
+  DiscoverabilityAnalysisResult,
   CollectedData,
   RobotRules
 }; 

@@ -1,1104 +1,797 @@
 /**
- * Advanced Structured Data Analyzer for AEO Auditor
- * Analyzes JSON-LD, meta tags, OpenGraph, micro-data, and RDFa
- * Version 2.0 - Enhanced with advanced validation and context-aware recommendations
+ * STRUCTURED DATA ANALYZER - PHASE 3A: NEW HIERARCHICAL ARCHITECTURE
+ * 
+ * Analyzes structured data for search engines and AI (25% of total score)
+ * Architecture: 📋 STRUCTURED DATA → JSON-LD + Meta Tags + Social Meta → MetricCards
+ * 
+ * FIXES: Math inconsistencies, extensible schema weights, diversity bonuses
  */
 
 import * as cheerio from 'cheerio';
-import logger from '@/utils/logger';
-import https from 'https';
-import http from 'http';
+import { 
+  MetricCard, 
+  DrawerSubSection, 
+  MainSection, 
+  PerformanceStatus 
+} from '@/types/analysis-architecture';
 
-// Types and interfaces
-interface CriteriaWeights {
-  jsonLd: {
-    presence: number;
-    validity: number;
-    schemaTypes: number;
-    completeness: number;
-  };
-  metaTags: {
-    title: number;
-    description: number;
-    technical: number;
-  };
-  openGraph: {
-    basic: number;
-    image: number;
-  };
-  microData: {
-    bonus: number;
-  };
-}
+// ===== INTERFACES AND TYPES =====
 
-interface SchemaTypes {
-  [key: string]: number;
-}
-
-interface RequiredFields {
-  [schemaType: string]: string[];
-}
-
-interface ValidationDetails {
-  validSchemas: string[];
-  invalidSchemas: string[];
-  completenessScores: Record<string, CompletenessValidation>;
-  totalScripts: number;
-}
-
-interface CompletenessValidation {
-  score: number;
-  required: string[];
-  present: string[];
-  missing: string[];
-  percentage: number;
-}
-
-interface AnalysisResult {
-  score: number;
-  maxScore: number;
-  status: string;
-  details: string;
-  validationDetails?: ValidationDetails;
-  breakdown?: any;
-}
-
-interface TitleAnalysis {
-  score: number;
-  maxScore: number;
-  status: string;
-  details: {
-    length: number;
-    text: string;
-    assessment: string;
-    warning?: string;
-  };
-}
-
-interface DescriptionAnalysis {
-  score: number;
-  maxScore: number;
-  status: string;
-  details: {
-    length: number;
-    text: string;
-    assessment: string;
-    uniqueness: number;
-  };
-}
-
-interface TechnicalMetaAnalysis {
-  score: number;
-  maxScore: number;
-  details: {
-    viewport: { present: boolean; content?: string };
-    charset: { present: boolean; value?: string };
-    robots: { 
-      present: boolean; 
-      content?: string; 
-      analysis?: {
-        index: boolean;
-        follow: boolean;
-        archive: boolean;
-        snippet: boolean;
-        directives: string[];
-      };
+interface StructuredDataAnalysisResult {
+  section: MainSection;
+  rawData: {
+    jsonLdFound: boolean;
+    jsonLdValid: boolean;
+    detectedSchemas: string[];
+    schemaCompleteness: Record<string, number>;
+    titleTag: {
+      present: boolean;
+      length: number;
+      text: string;
     };
-  };
-}
-
-interface ImageValidation {
-  score: number;
-  maxScore: number;
-  details: {
-    present: boolean;
-    url?: string;
-    validUrl?: boolean;
-    protocol?: string;
-    format?: string;
-    supportedFormat?: boolean;
-    assessment?: string;
-    warning?: string;
+    metaDescription: {
+      present: boolean;
+      length: number;
+      text: string;
+    };
+    technicalMeta: {
+      viewport: boolean;
+      charset: boolean;
+      robots: boolean;
+    };
+    openGraph: {
+      title: boolean;
+      description: boolean;
+      image: boolean;
+      url: boolean;
+    };
+    totalSchemas: number;
+    diversityBonus: boolean;
     error?: string;
   };
 }
 
-interface UrlContext {
-  type: 'ecommerce' | 'blog' | 'business' | 'general';
-  confidence: number;
+interface JSONLDData {
+  scripts: any[];
+  validSchemas: string[];
+  invalidSchemas: string[];
+  totalScripts: number;
+  schemaCompleteness: Record<string, number>;
 }
 
-interface Recommendation {
-  priority: 'critical' | 'high' | 'medium' | 'low';
-  category: string;
-  message: string;
-  impact: string;
+// ===== CONSTANTS =====
+
+const SECTION_CONFIG = {
+  id: 'structured-data',
+  name: 'Structured Data',
+  emoji: '📋',
+  description: 'Schema markup and metadata for search engines and AI',
+  weightPercentage: 25,
+  maxScore: 100
+};
+
+/**
+ * Extensible schema weights system - easy to add new schemas
+ */
+const SCHEMA_WEIGHTS = {
+  // Core schemas (high priority)
+  Organization: 1.0,     // 10 pts max
+  WebSite: 0.8,         // 8 pts max
+  Article: 0.9,         // 9 pts max
+  Product: 0.9,         // 9 pts max
+  LocalBusiness: 1.0,   // 10 pts max
+  
+  // Content schemas (medium priority)
+  BlogPosting: 0.8,     // 8 pts max
+  NewsArticle: 0.8,     // 8 pts max
+  Recipe: 0.7,          // 7 pts max
+  Event: 0.7,           // 7 pts max
+  FAQPage: 0.8,         // 8 pts max
+  
+  // Enhancement schemas (lower priority)
+  BreadcrumbList: 0.6,  // 6 pts max
+  AggregateRating: 0.5, // 5 pts max
+  Review: 0.5,          // 5 pts max
+  Person: 0.7,          // 7 pts max
+} as const;
+
+const UNKNOWN_SCHEMA_BONUS = 0.4; // 4 pts for new/unknown schemas
+const DIVERSITY_BONUS_THRESHOLD = 3; // 3+ different schemas get bonus
+const MAX_SCHEMA_POINTS = 20; // Schema Types & Completeness max points
+
+/**
+ * Required fields for schema completeness validation
+ */
+const REQUIRED_SCHEMA_FIELDS = {
+  Organization: ['@type', 'name'],
+  WebSite: ['@type', 'name', 'url'],
+  Article: ['@type', 'headline', 'author'],
+  Product: ['@type', 'name', 'description'],
+  LocalBusiness: ['@type', 'name', 'address'],
+  BlogPosting: ['@type', 'headline', 'author', 'datePublished'],
+  NewsArticle: ['@type', 'headline', 'author', 'datePublished'],
+  Recipe: ['@type', 'name', 'recipeIngredient', 'recipeInstructions'],
+  Event: ['@type', 'name', 'startDate', 'location'],
+  FAQPage: ['@type', 'mainEntity'],
+  BreadcrumbList: ['@type', 'itemListElement'],
+  Person: ['@type', 'name'],
+} as const;
+
+// ===== UTILITIES =====
+
+/**
+ * Determines performance status based on score
+ */
+function getPerformanceStatus(score: number, maxScore: number): PerformanceStatus {
+  const percentage = (score / maxScore) * 100;
+  if (percentage >= 90) return 'excellent';
+  if (percentage >= 70) return 'good';
+  if (percentage >= 50) return 'warning';
+  return 'error';
 }
 
-interface StructuredDataResult {
-  category: string;
-  score: number;
-  maxScore: number;
-  breakdown: {
-    jsonLd: AnalysisResult;
-    metaTags: AnalysisResult;
-    openGraph: AnalysisResult;
-    microData: AnalysisResult;
+/**
+ * Parses and validates JSON-LD structured data
+ */
+function parseJSONLD(html: string): JSONLDData {
+  const $ = cheerio.load(html);
+  const scripts = $('script[type="application/ld+json"]');
+  
+  const result: JSONLDData = {
+    scripts: [],
+    validSchemas: [],
+    invalidSchemas: [],
+    totalScripts: scripts.length,
+    schemaCompleteness: {}
   };
-  recommendations: string[];
-  metadata: {
-    analyzedAt: string;
-    version: string;
-    features: string[];
-  };
-  error?: string;
-}
 
-export class StructuredDataAnalyzer {
-  private maxScore: number;
-  private criteria: CriteriaWeights;
-  private schemaTypes: SchemaTypes;
-  private requiredFields: RequiredFields;
-  private schemaCache: Map<string, any>;
-  private imageCache: Map<string, ImageValidation>;
-
-  constructor() {
-    this.maxScore = 100;
-    
-    // Enhanced granular scoring system
-    this.criteria = {
-      jsonLd: {
-        presence: 15,        // JSON-LD exists
-        validity: 10,        // Valid JSON syntax
-        schemaTypes: 10,     // Relevant schema types
-        completeness: 5      // Complete required fields
-      },
-      metaTags: {
-        title: 15,           // Title tag optimization
-        description: 15,     // Description optimization
-        technical: 5         // viewport, charset, robots
-      },
-      openGraph: {
-        basic: 15,           // og:title, og:description
-        image: 10            // og:image with validation
-      },
-      microData: {
-        bonus: 5             // Additional structured data formats
-      }
-    };
-
-    // Schema types with scoring weights
-    this.schemaTypes = {
-      Organization: 15,
-      WebSite: 10,
-      Article: 12,
-      Product: 12,
-      FAQPage: 8,
-      BreadcrumbList: 8,
-      Person: 10,
-      LocalBusiness: 12,
-      Corporation: 12,
-      BlogPosting: 10,
-      NewsArticle: 12,
-      Recipe: 10,
-      Event: 10,
-      Place: 8
-    };
-
-    // Required fields for schema completeness validation
-    this.requiredFields = {
-      Organization: ['name', 'url'],
-      WebSite: ['name', 'url'],
-      Article: ['headline', 'author', 'datePublished'],
-      Product: ['name', 'description', 'offers'],
-      Person: ['name'],
-      LocalBusiness: ['name', 'address', 'telephone'],
-      BlogPosting: ['headline', 'author', 'datePublished'],
-      NewsArticle: ['headline', 'author', 'datePublished'],
-      Recipe: ['name', 'recipeIngredient', 'recipeInstructions'],
-      Event: ['name', 'startDate', 'location']
-    };
-
-    // Performance cache for schema validation
-    this.schemaCache = new Map();
-    this.imageCache = new Map();
-  }
-
-  /**
-   * Main analysis method with enhanced features
-   * @param htmlContent - HTML content to analyze
-   * @param url - URL being analyzed
-   * @returns Enhanced analysis results with advanced scoring and recommendations
-   */
-  async analyze(htmlContent: string, url: string): Promise<StructuredDataResult> {
-    logger.info('Starting advanced structured data analysis...');
-    
+  scripts.each((_, script) => {
     try {
-      if (!htmlContent || typeof htmlContent !== 'string') {
-        throw new Error('Invalid HTML content provided');
-      }
+      const content = $(script).html();
+      if (!content) return;
 
-      const $ = cheerio.load(htmlContent);
+      const jsonData = JSON.parse(content);
+      const schemas = Array.isArray(jsonData) ? jsonData : [jsonData];
       
-      // Enhanced parallel analysis
-      const [jsonLdResult, metaTagsResult, openGraphResult, microDataResult] = await Promise.allSettled([
-        this.analyzeEnhancedJsonLd($, url),
-        this.analyzeEnhancedMetaTags($),
-        this.analyzeEnhancedOpenGraph($, url),
-        this.analyzeMicroData($)
-      ]);
-
-      // Extract results from Promise.allSettled
-      const jsonLd = jsonLdResult.status === 'fulfilled' ? jsonLdResult.value : this.getFailureResult('jsonLd');
-      const metaTags = metaTagsResult.status === 'fulfilled' ? metaTagsResult.value : this.getFailureResult('metaTags');
-      const openGraph = openGraphResult.status === 'fulfilled' ? openGraphResult.value : this.getFailureResult('openGraph');
-      const microData = microDataResult.status === 'fulfilled' ? microDataResult.value : this.getFailureResult('microData');
-      
-      // Calculate total score with bonus for micro-data
-      const totalScore = Math.min(jsonLd.score + metaTags.score + openGraph.score + microData.score, this.maxScore);
-      
-      // Generate smart context-aware recommendations
-      const recommendations = await this.generateSmartRecommendations(jsonLd, metaTags, openGraph, microData, url);
-      
-      logger.info(`Advanced structured data analysis completed. Score: ${totalScore}/${this.maxScore}`);
-      
-      return {
-        category: 'structured-data',
-        score: totalScore,
-        maxScore: this.maxScore,
-        breakdown: {
-          jsonLd,
-          metaTags,
-          openGraph,
-          microData
-        },
-        recommendations,
-        metadata: {
-          analyzedAt: new Date().toISOString(),
-          version: '2.0',
-          features: ['enhanced-validation', 'micro-data', 'context-aware-recommendations']
-        }
-      };
-      
-    } catch (error) {
-      logger.error(`Advanced structured data analysis failed: ${(error as Error).message}`);
-      
-      return {
-        category: 'structured-data',
-        score: 0,
-        maxScore: this.maxScore,
-        breakdown: {
-          jsonLd: this.getFailureResult('jsonLd', (error as Error).message),
-          metaTags: this.getFailureResult('metaTags', (error as Error).message),
-          openGraph: this.getFailureResult('openGraph', (error as Error).message),
-          microData: this.getFailureResult('microData', (error as Error).message)
-        },
-        recommendations: [`❌ Structured data analysis failed: ${(error as Error).message}`],
-        metadata: {
-          analyzedAt: new Date().toISOString(),
-          version: '2.0',
-          features: ['error-recovery']
-        },
-        error: (error as Error).message
-      };
-    }
-  }
-
-  /**
-   * Enhanced JSON-LD analysis with schema completeness validation
-   * @param $ - Cheerio instance
-   * @param url - URL for context
-   * @returns Enhanced JSON-LD analysis result
-   */
-  async analyzeEnhancedJsonLd($: cheerio.CheerioAPI, url: string): Promise<AnalysisResult> {
-    const maxScore = Object.values(this.criteria.jsonLd).reduce((a, b) => a + b, 0);
-    let score = 0;
-    let status = 'fail';
-    let details = 'No JSON-LD structured data found';
-    let validationDetails: ValidationDetails = {
-      validSchemas: [],
-      invalidSchemas: [],
-      completenessScores: {},
-      totalScripts: 0
-    };
-    
-    try {
-      const jsonLdScripts = $('script[type="application/ld+json"]');
-      
-      if (jsonLdScripts.length === 0) {
-        return { score, maxScore, status, details, validationDetails };
-      }
-      
-      let validSchemas: string[] = [];
-      let invalidSchemas: string[] = [];
-      let completenessScores: Record<string, CompletenessValidation> = {};
-      
-      // Presence score
-      score += this.criteria.jsonLd.presence;
-      
-      for (let i = 0; i < jsonLdScripts.length; i++) {
-        try {
-          const content = $(jsonLdScripts[i]).html();
-          if (!content) continue;
+      schemas.forEach(schema => {
+        if (schema['@type']) {
+          const schemaType = schema['@type'];
+          result.validSchemas.push(schemaType);
+          result.scripts.push(schema);
           
-          const jsonLd = JSON.parse(content);
-          
-          // Validity score
-          score += this.criteria.jsonLd.validity / jsonLdScripts.length;
-          
-          // Handle arrays of schema objects
-          const schemas = Array.isArray(jsonLd) ? jsonLd : [jsonLd];
-          
-          for (const schema of schemas) {
-            if (schema['@type']) {
-              const schemaType = schema['@type'];
-              validSchemas.push(schemaType);
-              
-              // Schema type scoring
-              if (this.schemaTypes[schemaType]) {
-                score += Math.min(this.criteria.jsonLd.schemaTypes, this.schemaTypes[schemaType]);
-              }
-              
-              // Completeness validation
-              const completeness = this.validateSchemaCompleteness(schema, schemaType);
-              completenessScores[schemaType] = completeness;
-              
-              if (completeness.score > 0.7) {
-                score += this.criteria.jsonLd.completeness;
-              } else if (completeness.score > 0.4) {
-                score += this.criteria.jsonLd.completeness * 0.5;
-              }
-            }
+          // Calculate completeness for known schemas
+          if (REQUIRED_SCHEMA_FIELDS[schemaType as keyof typeof REQUIRED_SCHEMA_FIELDS]) {
+            const required = REQUIRED_SCHEMA_FIELDS[schemaType as keyof typeof REQUIRED_SCHEMA_FIELDS];
+            const present = required.filter(field => schema[field] !== undefined);
+            result.schemaCompleteness[schemaType] = (present.length / required.length) * 100;
           }
-          
-        } catch (parseError) {
-          logger.warn(`Invalid JSON-LD found: ${(parseError as Error).message}`);
-          invalidSchemas.push((parseError as Error).message);
         }
-      }
-      
-      // Determine status and details
-      if (validSchemas.length > 0) {
-        status = score >= maxScore * 0.7 ? 'pass' : 'partial';
-        details = `Found ${validSchemas.length} valid schema(s): ${Array.from(new Set(validSchemas)).join(', ')}`;
-        
-        if (invalidSchemas.length > 0) {
-          details += ` (${invalidSchemas.length} invalid)`;
-        }
-      }
-      
-      validationDetails = {
-        validSchemas: Array.from(new Set(validSchemas)),
-        invalidSchemas,
-        completenessScores,
-        totalScripts: jsonLdScripts.length
-      };
-      
+      });
     } catch (error) {
-      logger.error(`Enhanced JSON-LD analysis error: ${(error as Error).message}`);
-      details = `JSON-LD analysis error: ${(error as Error).message}`;
+      result.invalidSchemas.push('Invalid JSON-LD');
     }
-    
-    return { score: Math.min(score, maxScore), maxScore, status, details, validationDetails };
+  });
+
+  return result;
+}
+
+/**
+ * Calculates schema diversity bonus
+ */
+function calculateDiversityBonus(schemas: string[]): number {
+  const uniqueSchemas = new Set(schemas);
+  return uniqueSchemas.size >= DIVERSITY_BONUS_THRESHOLD ? 2 : 0; // 2 point bonus
+}
+
+// ===== METRIC ANALYZERS =====
+
+/**
+ * Analyzes JSON-LD presence and validity (20 points)
+ */
+function analyzeJSONLDPresence(jsonldData: JSONLDData): MetricCard {
+  let score = 0;
+  let problems: string[] = [];
+  let solutions: string[] = [];
+
+  // Presence check (10 points)
+  if (jsonldData.totalScripts > 0) {
+    score += 10;
+  } else {
+    problems.push("No JSON-LD structured data found on the page");
   }
 
-  /**
-   * Enhanced meta tags analysis including technical tags
-   * @param $ - Cheerio instance
-   * @returns Enhanced meta tags analysis result
-   */
-  analyzeEnhancedMetaTags($: cheerio.CheerioAPI): AnalysisResult {
-    const maxScore = Object.values(this.criteria.metaTags).reduce((a, b) => a + b, 0);
-    let score = 0;
-    let status = 'fail';
-    let details = '';
-    let breakdown: any = {};
-    
-    try {
-      // Title analysis (15 points)
-      const title = $('title').text().trim();
-      const titleAnalysis = this.analyzeTitleTag(title);
-      score += titleAnalysis.score;
-      breakdown.title = titleAnalysis;
-      
-      // Description analysis (15 points)
-      const description = $('meta[name="description"]').attr('content') || '';
-      const descriptionAnalysis = this.analyzeDescriptionTag(description);
-      score += descriptionAnalysis.score;
-      breakdown.description = descriptionAnalysis;
-      
-      // Technical meta tags analysis (5 points)
-      const technicalAnalysis = this.analyzeTechnicalMetaTags($);
-      score += technicalAnalysis.score;
-      breakdown.technical = technicalAnalysis;
-      
-      // Generate readable details string
-      const titleStatus = titleAnalysis.status || 'fail';
-      const descStatus = descriptionAnalysis.status || 'fail';
-      const techCount = Object.values(technicalAnalysis.details || {}).filter((item: any) => item.present).length;
-      
-      details = `Title: ${titleStatus} (${title.length} chars), Description: ${descStatus} (${description.length} chars), Technical tags: ${techCount}/3`;
-      
-      // Determine overall status
-      if (score >= maxScore * 0.8) {
-        status = 'pass';
-      } else if (score >= maxScore * 0.5) {
-        status = 'partial';
-      }
-      
-    } catch (error) {
-      logger.error(`Enhanced meta tags analysis error: ${(error as Error).message}`);
-      details = `Meta tags analysis error: ${(error as Error).message}`;
-      breakdown = { error: (error as Error).message };
-    }
-    
-    return { score: Math.min(score, maxScore), maxScore, status, details, breakdown };
+  // Validity check (10 points)
+  if (jsonldData.validSchemas.length > 0) {
+    score += 10;
+  } else if (jsonldData.totalScripts > 0) {
+    problems.push("JSON-LD scripts found but contain invalid JSON syntax");
+    solutions.push("Validate JSON-LD syntax using Google's Structured Data Testing Tool");
   }
 
-  /**
-   * Enhanced OpenGraph analysis with image validation
-   * @param $ - Cheerio instance
-   * @param url - URL for context
-   * @returns Enhanced OpenGraph analysis result
-   */
-  async analyzeEnhancedOpenGraph($: cheerio.CheerioAPI, url: string): Promise<AnalysisResult> {
-    const maxScore = Object.values(this.criteria.openGraph).reduce((a, b) => a + b, 0);
-    let score = 0;
-    let status = 'fail';
-    let details = '';
-    let breakdown: any = {};
-    
-    try {
-      const ogTags = {
-        title: $('meta[property="og:title"]').attr('content') || '',
-        description: $('meta[property="og:description"]').attr('content') || '',
-        image: $('meta[property="og:image"]').attr('content') || '',
-        url: $('meta[property="og:url"]').attr('content') || '',
-        type: $('meta[property="og:type"]').attr('content') || '',
-        siteName: $('meta[property="og:site_name"]').attr('content') || ''
-      };
-      
-      // Basic OpenGraph analysis (15 points)
-      let basicScore = 0;
-      if (ogTags.title) basicScore += 7;
-      if (ogTags.description) basicScore += 8;
-      
-      score += Math.min(basicScore, this.criteria.openGraph.basic);
-      breakdown.basic = {
-        title: !!ogTags.title,
-        description: !!ogTags.description,
-        score: basicScore
-      };
-      
-      // Image validation (10 points)
-      const imageValidation = await this.validateOpenGraphImage(ogTags.image);
-      score += imageValidation.score;
-      breakdown.image = imageValidation;
-      
-      // Bonus for complete setup
-      const completeFields = Object.values(ogTags).filter(Boolean).length;
-      let completeness = '';
-      if (completeFields >= 4) {
-        completeness = 'complete';
-      } else if (completeFields >= 2) {
-        completeness = 'partial';
-      } else {
-        completeness = 'minimal';
-      }
-      breakdown.completeness = completeness;
-      
-      // Generate readable details string
-      const foundTags: string[] = [];
-      if (ogTags.title) foundTags.push('title');
-      if (ogTags.description) foundTags.push('description');
-      if (ogTags.image) foundTags.push('image');
-      if (ogTags.url) foundTags.push('url');
-      if (ogTags.type) foundTags.push('type');
-      
-      details = foundTags.length > 0 
-        ? `OpenGraph tags: ${foundTags.join(', ')} (${completeness} setup)`
-        : 'No OpenGraph tags found';
-      
-      // Determine status
-      if (score >= maxScore * 0.8) {
-        status = 'pass';
-      } else if (score >= maxScore * 0.4) {
-        status = 'partial';
-      }
-      
-    } catch (error) {
-      logger.error(`Enhanced OpenGraph analysis error: ${(error as Error).message}`);
-      details = `OpenGraph analysis error: ${(error as Error).message}`;
-      breakdown = { error: (error as Error).message };
-    }
-    
-    return { score: Math.min(score, maxScore), maxScore, status, details, breakdown };
-  }
-
-  /**
-   * Analyze micro-data and RDFa support
-   * @param $ - Cheerio instance
-   * @returns Micro-data analysis result
-   */
-  analyzeMicroData($: cheerio.CheerioAPI): AnalysisResult {
-    const maxScore = this.criteria.microData.bonus;
-    let score = 0;
-    let status = 'none';
-    let details = '';
-    let breakdown: any = {};
-    
-    try {
-      // Detect itemscope/itemtype attributes (micro-data)
-      const microDataItems = $('[itemscope]');
-      const microDataTypes: string[] = [];
-      
-      microDataItems.each((i, element) => {
-        const itemType = $(element).attr('itemtype');
-        if (itemType) {
-          microDataTypes.push(itemType.split('/').pop() || '');
-        }
-      });
-      
-      // Detect RDFa attributes
-      const rdfaItems = $('[typeof]');
-      const rdfaTypes: string[] = [];
-      
-      rdfaItems.each((i, element) => {
-        const typeOf = $(element).attr('typeof');
-        if (typeOf) {
-          rdfaTypes.push(typeOf);
-        }
-      });
-      
-      // Scoring for additional structured data formats
-      if (microDataItems.length > 0 || rdfaItems.length > 0) {
-        score = maxScore;
-        status = 'present';
-      }
-      
-      breakdown = {
-        microData: {
-          count: microDataItems.length,
-          types: Array.from(new Set(microDataTypes))
-        },
-        rdfa: {
-          count: rdfaItems.length,
-          types: Array.from(new Set(rdfaTypes))
-        }
-      };
-      
-      // Generate readable details string
-      const totalItems = microDataItems.length + rdfaItems.length;
-      if (totalItems > 0) {
-        const parts: string[] = [];
-        if (microDataItems.length > 0) parts.push(`${microDataItems.length} micro-data items`);
-        if (rdfaItems.length > 0) parts.push(`${rdfaItems.length} RDFa items`);
-        details = `Found ${parts.join(' and ')}`;
-      } else {
-        details = 'No micro-data or RDFa found';
-      }
-      
-    } catch (error) {
-      logger.error(`Micro-data analysis error: ${(error as Error).message}`);
-      details = `Micro-data analysis error: ${(error as Error).message}`;
-      breakdown = { error: (error as Error).message };
-    }
-    
-    return { score, maxScore, status, details, breakdown };
-  }
-
-  /**
-   * Validate schema completeness
-   * @param schema - Schema object to validate
-   * @param schemaType - Type of schema
-   * @returns Completeness validation result
-   */
-  validateSchemaCompleteness(schema: any, schemaType: string): CompletenessValidation {
-    const required = this.requiredFields[schemaType] || [];
-    const present = required.filter(field => schema[field] && schema[field] !== '');
-    
-    const score = required.length > 0 ? present.length / required.length : 1;
-    
-    return {
-      score,
-      required,
-      present,
-      missing: required.filter(field => !present.includes(field)),
-      percentage: Math.round(score * 100)
-    };
-  }
-
-  /**
-   * Analyze title tag with enhanced validation
-   * @param title - Title text
-   * @returns Title analysis result
-   */
-  analyzeTitleTag(title: string): TitleAnalysis {
-    const maxScore = this.criteria.metaTags.title;
-    let score = 0;
-    let status = 'fail';
-    let details: TitleAnalysis['details'] = {
-      length: 0,
-      text: '',
-      assessment: ''
-    };
-    
-    if (title) {
-      const length = title.length;
-      details.length = length;
-      details.text = title;
-      
-      if (length >= 30 && length <= 60) {
-        score = maxScore;
-        status = 'optimal';
-        details.assessment = 'Perfect length for search results';
-      } else if (length >= 20 && length <= 80) {
-        score = maxScore * 0.8;
-        status = 'good';
-        details.assessment = 'Good length, minor optimization possible';
-      } else if (length > 0) {
-        score = maxScore * 0.5;
-        status = 'suboptimal';
-        details.assessment = length < 30 ? 'Too short, may not be descriptive enough' : 'Too long, may be truncated in search results';
-      }
-      
-      // Check for keyword stuffing
-      const words = title.toLowerCase().split(/\s+/);
-      const uniqueWords = new Set(words);
-      if (words.length > uniqueWords.size * 1.5) {
-        details.warning = 'Possible keyword stuffing detected';
-      }
-    } else {
-      details.assessment = 'Title tag is missing';
-    }
-    
-    return { score, maxScore, status, details };
-  }
-
-  /**
-   * Analyze description tag with enhanced validation
-   * @param description - Description text
-   * @returns Description analysis result
-   */
-  analyzeDescriptionTag(description: string): DescriptionAnalysis {
-    const maxScore = this.criteria.metaTags.description;
-    let score = 0;
-    let status = 'fail';
-    let details: DescriptionAnalysis['details'] = {
-      length: 0,
-      text: '',
-      assessment: '',
-      uniqueness: 0
-    };
-    
-    if (description) {
-      const length = description.length;
-      details.length = length;
-      details.text = description;
-      
-      if (length >= 120 && length <= 160) {
-        score = maxScore;
-        status = 'optimal';
-        details.assessment = 'Perfect length for search snippets';
-      } else if (length >= 100 && length <= 180) {
-        score = maxScore * 0.8;
-        status = 'good';
-        details.assessment = 'Good length, minor optimization possible';
-      } else if (length > 0) {
-        score = maxScore * 0.5;
-        status = 'suboptimal';
-        details.assessment = length < 120 ? 'Too short, add more descriptive content' : 'Too long, may be truncated in search results';
-      }
-      
-      // Check for uniqueness (basic duplicate detection)
-      const words = description.toLowerCase().split(/\s+/);
-      const uniqueWords = new Set(words);
-      details.uniqueness = Math.round((uniqueWords.size / words.length) * 100);
-      
-    } else {
-      details.assessment = 'Meta description is missing';
-    }
-    
-    return { score, maxScore, status, details };
-  }
-
-  /**
-   * Analyze technical meta tags
-   * @param $ - Cheerio instance
-   * @returns Technical meta tags analysis result
-   */
-  analyzeTechnicalMetaTags($: cheerio.CheerioAPI): TechnicalMetaAnalysis {
-    const maxScore = this.criteria.metaTags.technical;
-    let score = 0;
-    let details: TechnicalMetaAnalysis['details'] = {
-      viewport: { present: false },
-      charset: { present: false },
-      robots: { present: false }
-    };
-    
-    // Viewport meta tag
-    const viewport = $('meta[name="viewport"]').attr('content');
-    if (viewport) {
-      score += 2;
-      details.viewport = { present: true, content: viewport };
-    } else {
-      details.viewport = { present: false };
-    }
-    
-    // Charset declaration
-    const charset = $('meta[charset]').attr('charset') || $('meta[http-equiv="Content-Type"]').attr('content');
-    if (charset) {
-      score += 1;
-      details.charset = { present: true, value: charset };
-    } else {
-      details.charset = { present: false };
-    }
-    
-    // Robots meta tag
-    const robots = $('meta[name="robots"]').attr('content');
-    if (robots) {
-      score += 2;
-      details.robots = { 
-        present: true, 
-        content: robots,
-        analysis: this.parseRobotsMetaTag(robots)
-      };
-    } else {
-      details.robots = { present: false };
-    }
-    
-    return { score, maxScore, details };
-  }
-
-  /**
-   * Parse robots meta tag
-   * @param robotsContent - Robots meta tag content
-   * @returns Parsed robots directives
-   */
-  parseRobotsMetaTag(robotsContent: string) {
-    const directives = robotsContent.toLowerCase().split(',').map(d => d.trim());
-    
-    return {
-      index: !directives.includes('noindex'),
-      follow: !directives.includes('nofollow'),
-      archive: !directives.includes('noarchive'),
-      snippet: !directives.includes('nosnippet'),
-      directives
-    };
-  }
-
-  /**
-   * Validate OpenGraph image with accessibility check
-   * @param ogImageUrl - OpenGraph image URL
-   * @returns Image validation result
-   */
-  async validateOpenGraphImage(ogImageUrl: string): Promise<ImageValidation> {
-    const maxScore = this.criteria.openGraph.image;
-    let score = 0;
-    let details: ImageValidation['details'] = {
-      present: !!ogImageUrl,
-      url: ogImageUrl
-    };
-    
-    if (!ogImageUrl) {
-      details.assessment = 'No OpenGraph image specified';
-      return { score, maxScore, details };
-    }
-    
-    // Check cache first
-    if (this.imageCache.has(ogImageUrl)) {
-      const cached = this.imageCache.get(ogImageUrl);
-      if (cached) return cached;
-    }
-    
-    try {
-      // Basic scoring for presence
-      score += 5;
-      
-      // Validate URL format
-      try {
-        const url = new URL(ogImageUrl);
-        details.validUrl = true;
-        details.protocol = url.protocol;
-        
-        // Check if HTTPS (preferred)
-        if (url.protocol === 'https:') {
-          score += 2;
-        }
-        
-        // Check file extension
-        const extension = url.pathname.split('.').pop()?.toLowerCase() || '';
-        const supportedFormats = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
-        
-        if (supportedFormats.includes(extension)) {
-          score += 3;
-          details.format = extension;
-          details.supportedFormat = true;
-        } else {
-          details.supportedFormat = false;
-          details.warning = 'Image format may not be supported by all social platforms';
-        }
-        
-      } catch (urlError) {
-        details.validUrl = false;
-        details.error = 'Invalid image URL format';
-      }
-      
-    } catch (error) {
-      details.error = `Image validation failed: ${(error as Error).message}`;
-    }
-    
-    const result: ImageValidation = { score: Math.min(score, maxScore), maxScore, details };
-    
-    // Cache result (with TTL simulation)
-    this.imageCache.set(ogImageUrl, result);
-    
-    return result;
-  }
-
-  /**
-   * Generate smart, context-aware recommendations
-   * @param jsonLd - JSON-LD analysis result
-   * @param metaTags - Meta tags analysis result
-   * @param openGraph - OpenGraph analysis result
-   * @param microData - Micro-data analysis result
-   * @param url - URL for context detection
-   * @returns Array of prioritized recommendations
-   */
-  async generateSmartRecommendations(
-    jsonLd: AnalysisResult, 
-    metaTags: AnalysisResult, 
-    openGraph: AnalysisResult, 
-    microData: AnalysisResult, 
-    url: string
-  ): Promise<string[]> {
-    const recommendations: Recommendation[] = [];
-    const context = this.detectUrlContext(url);
-    
-    // Critical issues first
-    if ((metaTags.breakdown as any)?.title?.status === 'fail') {
-      recommendations.push({
-        priority: 'critical',
-        category: 'meta-tags',
-        message: '❌ Add title tag (recommended: 30-60 characters)',
-        impact: 'High impact on search visibility'
-      });
-    }
-    
-    if ((metaTags.breakdown as any)?.description?.status === 'fail') {
-      recommendations.push({
-        priority: 'critical',
-        category: 'meta-tags',
-        message: '❌ Add meta description (recommended: 120-160 characters)',
-        impact: 'Essential for search result snippets'
-      });
-    }
-    
-    // JSON-LD recommendations based on context
-    if (jsonLd.status === 'fail') {
-      const contextualSchema = this.getContextualSchemaRecommendation(context);
-      recommendations.push({
-        priority: 'high',
-        category: 'json-ld',
-        message: `❌ Add JSON-LD structured data with ${contextualSchema} schema`,
-        impact: 'Improves AI search engine understanding'
-      });
-    } else if (jsonLd.status === 'partial') {
-      const missingSchemas = this.getMissingSchemas(jsonLd.validationDetails?.validSchemas || [], context);
-      if (missingSchemas.length > 0) {
-        recommendations.push({
-          priority: 'medium',
-          category: 'json-ld',
-          message: `⚠️ Consider adding ${missingSchemas.join(', ')} schema(s) for better context`,
-          impact: 'Enhanced entity recognition by AI engines'
-        });
-      }
-    }
-    
-    // OpenGraph recommendations
-    if (openGraph.status === 'fail') {
-      recommendations.push({
-        priority: 'medium',
-        category: 'social',
-        message: '❌ Add OpenGraph tags (og:title, og:description, og:image) for social sharing',
-        impact: 'Essential for social media visibility'
-      });
-    } else if (!(openGraph.breakdown as any)?.image?.details?.present) {
-      recommendations.push({
-        priority: 'medium',
-        category: 'social',
-        message: '⚠️ Add og:image for visual social media previews',
-        impact: 'Significantly improves social engagement'
-      });
-    }
-    
-    // Technical improvements
-    if (!(metaTags.breakdown as any)?.technical?.details?.viewport?.present) {
-      recommendations.push({
-        priority: 'medium',
-        category: 'technical',
-        message: '⚠️ Add viewport meta tag for mobile optimization',
-        impact: 'Essential for mobile search ranking'
-      });
-    }
-    
-    // Micro-data bonus recommendations
-    if (microData.status === 'none' && jsonLd.status === 'pass') {
-      recommendations.push({
-        priority: 'low',
-        category: 'enhancement',
-        message: '💡 Consider adding micro-data attributes for additional structured data support',
-        impact: 'Provides fallback for older crawlers'
-      });
-    }
-    
-    // Context-specific advanced recommendations
-    if (context.type === 'ecommerce') {
-      recommendations.push({
-        priority: 'high',
-        category: 'ecommerce',
-        message: '🛒 Implement Product schema with offers, reviews, and availability',
-        impact: 'Critical for shopping search results'
-      });
-    } else if (context.type === 'blog') {
-      recommendations.push({
-        priority: 'medium',
-        category: 'content',
-        message: '📝 Add Article/BlogPosting schema with author and publish date',
-        impact: 'Improves content discovery and attribution'
-      });
-    } else if (context.type === 'business') {
-      recommendations.push({
-        priority: 'medium',
-        category: 'business',
-        message: '🏢 Enhance Organization schema with contact information and social profiles',
-        impact: 'Better local search and knowledge panel presence'
-      });
-    }
-    
-    // Sort by priority
-    const priorityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
-    recommendations.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
-    
-    // Convert to simple strings for backward compatibility, but include priority info
-    return recommendations.map(rec => 
-      `${rec.message} ${rec.impact ? `(${rec.impact})` : ''}`
+  // Add solutions if problems exist
+  if (problems.length > 0) {
+    solutions.push(
+      "Add JSON-LD structured data to your page head section",
+      "Use Schema.org vocabulary for better search engine understanding",
+      "Test your structured data with Google Search Console",
+      "Consider using a CMS plugin for automatic schema generation"
     );
   }
 
-  /**
-   * Detect URL context for smart recommendations
-   * @param url - URL to analyze
-   * @returns Context information
-   */
-  detectUrlContext(url: string): UrlContext {
-    const urlLower = url.toLowerCase();
-    
-    // E-commerce indicators
-    if (urlLower.includes('shop') || urlLower.includes('store') || 
-        urlLower.includes('product') || urlLower.includes('cart') ||
-        urlLower.includes('amazon') || urlLower.includes('ebay')) {
-      return { type: 'ecommerce', confidence: 0.8 };
+  return {
+    id: 'jsonld-presence',
+    name: 'JSON-LD Presence & Validity',
+    score,
+    maxScore: 20,
+    status: getPerformanceStatus(score, 20),
+    explanation: "JSON-LD structured data helps search engines and AI understand your content context and purpose. Valid JSON-LD improves rich snippet eligibility and content comprehension.",
+    problems,
+    solutions,
+    successMessage: "Perfect! Your JSON-LD structured data is valid and well-formed.",
+    rawData: {
+      totalScripts: jsonldData.totalScripts,
+      validSchemas: jsonldData.validSchemas,
+      invalidSchemas: jsonldData.invalidSchemas
     }
+  };
+}
+
+/**
+ * Analyzes schema types and completeness (20 points) - FIXED MATH
+ */
+function analyzeSchemaTypesCompleteness(jsonldData: JSONLDData): MetricCard {
+  let score = 0;
+  let problems: string[] = [];
+  let solutions: string[] = [];
+
+  if (jsonldData.validSchemas.length === 0) {
+    problems.push("No valid schema types detected");
+    solutions.push(
+      "Add relevant schema types for your content",
+      "Use Organization schema for company information",
+      "Add Article or BlogPosting schema for content pages",
+      "Include Product schema for e-commerce items"
+    );
+  } else {
+    // Calculate weighted score for schema types (max 18 points)
+    let weightedScore = 0;
+    const processedSchemas = new Set<string>();
     
-    // Blog indicators
-    if (urlLower.includes('blog') || urlLower.includes('article') || 
-        urlLower.includes('news') || urlLower.includes('post')) {
-      return { type: 'blog', confidence: 0.7 };
+    jsonldData.validSchemas.forEach(schemaType => {
+      if (processedSchemas.has(schemaType)) return; // Avoid double counting
+      processedSchemas.add(schemaType);
+      
+      // Get weight for this schema type
+      const weight = SCHEMA_WEIGHTS[schemaType as keyof typeof SCHEMA_WEIGHTS] || UNKNOWN_SCHEMA_BONUS;
+      let schemaScore = weight * 10; // Base score
+      
+      // Apply completeness multiplier
+      const completeness = jsonldData.schemaCompleteness[schemaType] || 100;
+      schemaScore *= (completeness / 100);
+      
+      weightedScore += schemaScore;
+    });
+    
+    // Cap at 18 points, add diversity bonus (2 points max)
+    const cappedScore = Math.min(weightedScore, 18);
+    const diversityBonus = calculateDiversityBonus(jsonldData.validSchemas);
+    score = Math.min(cappedScore + diversityBonus, MAX_SCHEMA_POINTS);
+    
+    // Generate problems for incomplete schemas
+    Object.entries(jsonldData.schemaCompleteness).forEach(([schemaType, completeness]) => {
+      if (completeness < 80) {
+        problems.push(`${schemaType} schema is incomplete (${Math.round(completeness)}% complete)`);
+      }
+    });
+    
+    if (problems.length > 0) {
+      solutions.push(
+        "Add missing required fields to your schema markup",
+        "Use Google's Rich Results Test to validate completeness",
+        "Refer to Schema.org documentation for field requirements"
+      );
     }
-    
-    // Business/company indicators
-    if (urlLower.includes('about') || urlLower.includes('company') || 
-        urlLower.includes('contact') || urlLower.includes('service')) {
-      return { type: 'business', confidence: 0.6 };
-    }
-    
-    return { type: 'general', confidence: 0.5 };
   }
 
-  /**
-   * Get contextual schema recommendation
-   * @param context - URL context
-   * @returns Recommended schema type
-   */
-  getContextualSchemaRecommendation(context: UrlContext): string {
-    switch (context.type) {
-      case 'ecommerce':
-        return 'Product/Organization';
-      case 'blog':
-        return 'Article/BlogPosting';
-      case 'business':
-        return 'Organization/LocalBusiness';
-      default:
-        return 'Organization/WebSite';
+  return {
+    id: 'schema-types-completeness',
+    name: 'Schema Types & Completeness',
+    score,
+    maxScore: 20,
+    status: getPerformanceStatus(score, 20),
+    explanation: "Comprehensive schema types with complete field information help AI understand your content's specific context and relationships. Multiple schema types demonstrate content richness.",
+    problems,
+    solutions,
+    successMessage: "Excellent! You have comprehensive schema types covering your content.",
+    rawData: {
+      detectedSchemas: Array.from(new Set(jsonldData.validSchemas)),
+      completenessScores: jsonldData.schemaCompleteness,
+      diversityBonus: calculateDiversityBonus(jsonldData.validSchemas) > 0
+    }
+  };
+}
+
+/**
+ * Analyzes title tag (15 points)
+ */
+function analyzeTitleTag(html: string): MetricCard {
+  const $ = cheerio.load(html);
+  const titleElement = $('title').first();
+  const titleText = titleElement.text().trim();
+  
+  let score = 0;
+  let problems: string[] = [];
+  let solutions: string[] = [];
+
+  if (!titleText) {
+    problems.push("Title tag is missing or empty");
+    solutions.push(
+      "Add a descriptive title tag to your page",
+      "Include primary keywords in the title",
+      "Keep title length between 50-60 characters",
+      "Make each page title unique"
+    );
+  } else {
+    // Length assessment
+    if (titleText.length >= 50 && titleText.length <= 60) {
+      score += 10; // Optimal length
+    } else if (titleText.length >= 30 && titleText.length <= 70) {
+      score += 7; // Good length
+    } else if (titleText.length >= 20) {
+      score += 5; // Acceptable length
+      if (titleText.length < 30) {
+        problems.push("Title tag is too short (under 30 characters)");
+      } else {
+        problems.push("Title tag is too long (over 70 characters)");
+      }
+    } else {
+      problems.push("Title tag is very short (under 20 characters)");
+    }
+
+    // Content quality assessment
+    if (titleText.length > 0) {
+      score += 5; // Basic presence bonus
+    }
+
+    if (problems.length > 0) {
+      solutions.push(
+        "Optimize title length for search engines (50-60 characters ideal)",
+        "Include your primary keyword near the beginning",
+        "Write descriptive, compelling titles that users want to click"
+      );
     }
   }
 
-  /**
-   * Get missing schemas based on context
-   * @param currentSchemas - Currently detected schemas
-   * @param context - URL context
-   * @returns Missing schema recommendations
-   */
-  getMissingSchemas(currentSchemas: string[], context: UrlContext): string[] {
-    const missing: string[] = [];
-    
-    if (context.type === 'ecommerce' && !currentSchemas.includes('Product')) {
-      missing.push('Product');
+  return {
+    id: 'title-tag',
+    name: 'Title Tag',
+    score,
+    maxScore: 15,
+    status: getPerformanceStatus(score, 15),
+    explanation: "The title tag is the most important meta element for SEO and AI understanding. It appears in search results and browser tabs, directly influencing click-through rates.",
+    problems,
+    solutions,
+    successMessage: "Great! Your title tag is optimized for search engines and AI.",
+    rawData: {
+      present: !!titleText,
+      length: titleText.length,
+      text: titleText
     }
-    
-    if (context.type === 'blog' && !currentSchemas.includes('Article') && !currentSchemas.includes('BlogPosting')) {
-      missing.push('Article');
+  };
+}
+
+/**
+ * Analyzes meta description (10 points)
+ */
+function analyzeMetaDescription(html: string): MetricCard {
+  const $ = cheerio.load(html);
+  const descElement = $('meta[name="description"]').first();
+  const descText = descElement.attr('content')?.trim() || '';
+  
+  let score = 0;
+  let problems: string[] = [];
+  let solutions: string[] = [];
+
+  if (!descText) {
+    problems.push("Meta description is missing");
+    solutions.push(
+      "Add a meta description to your page",
+      "Write compelling descriptions that encourage clicks",
+      "Include relevant keywords naturally",
+      "Keep descriptions between 150-160 characters"
+    );
+  } else {
+    // Length assessment
+    if (descText.length >= 140 && descText.length <= 160) {
+      score += 7; // Optimal length
+    } else if (descText.length >= 120 && descText.length <= 170) {
+      score += 5; // Good length
+    } else if (descText.length >= 50) {
+      score += 3; // Acceptable length
+      if (descText.length < 120) {
+        problems.push("Meta description is too short (under 120 characters)");
+      } else {
+        problems.push("Meta description is too long (over 170 characters)");
+      }
+    } else {
+      problems.push("Meta description is very short (under 50 characters)");
     }
-    
-    if (!currentSchemas.includes('Organization') && !currentSchemas.includes('LocalBusiness')) {
-      missing.push('Organization');
+
+    // Content quality bonus
+    if (descText.length > 0) {
+      score += 3; // Basic presence bonus
     }
-    
-    if (!currentSchemas.includes('WebSite')) {
-      missing.push('WebSite');
+
+    if (problems.length > 0) {
+      solutions.push(
+        "Optimize description length (140-160 characters ideal)",
+        "Write unique descriptions for each page",
+        "Include a clear call-to-action when appropriate"
+      );
     }
-    
-    return missing;
   }
 
-  /**
-   * Get failure result for error handling
-   * @param category - Category that failed
-   * @param error - Error message
-   * @returns Failure result object
-   */
-  getFailureResult(category: string, error: string = 'Analysis failed'): AnalysisResult {
-    const maxScores: Record<string, number> = {
-      jsonLd: Object.values(this.criteria.jsonLd).reduce((a, b) => a + b, 0),
-      metaTags: Object.values(this.criteria.metaTags).reduce((a, b) => a + b, 0),
-      openGraph: Object.values(this.criteria.openGraph).reduce((a, b) => a + b, 0),
-      microData: this.criteria.microData.bonus
+  return {
+    id: 'meta-description',
+    name: 'Meta Description',
+    score,
+    maxScore: 10,
+    status: getPerformanceStatus(score, 10),
+    explanation: "Meta descriptions provide concise summaries that appear in search results. Well-crafted descriptions improve click-through rates and help AI understand page content.",
+    problems,
+    solutions,
+    successMessage: "Perfect! Your meta description effectively summarizes your content.",
+    rawData: {
+      present: !!descText,
+      length: descText.length,
+      text: descText
+    }
+  };
+}
+
+/**
+ * Analyzes technical meta tags (10 points)
+ */
+function analyzeTechnicalMeta(html: string): MetricCard {
+  const $ = cheerio.load(html);
+  
+  let score = 0;
+  let problems: string[] = [];
+  let solutions: string[] = [];
+
+  // Viewport meta (4 points)
+  const viewport = $('meta[name="viewport"]').first();
+  if (viewport.length && viewport.attr('content')) {
+    score += 4;
+  } else {
+    problems.push("Viewport meta tag is missing or empty");
+  }
+
+  // Charset declaration (3 points)
+  const charset = $('meta[charset]').first();
+  if (charset.length || $('meta[http-equiv="Content-Type"]').length) {
+    score += 3;
+  } else {
+    problems.push("Character encoding declaration is missing");
+  }
+
+  // Robots meta (3 points)
+  const robots = $('meta[name="robots"]').first();
+  if (robots.length && robots.attr('content')) {
+    score += 3;
+  } else {
+    problems.push("Robots meta tag is missing (optional but recommended)");
+  }
+
+  if (problems.length > 0) {
+    solutions.push(
+      "Add viewport meta tag for mobile responsiveness",
+      "Include charset declaration for proper text encoding",
+      "Consider adding robots meta tag for crawling directives",
+      "Use HTML5 doctype and modern meta tag syntax"
+    );
+  }
+
+  return {
+    id: 'technical-meta',
+    name: 'Technical Meta Tags',
+    score,
+    maxScore: 10,
+    status: getPerformanceStatus(score, 10),
+    explanation: "Technical meta tags ensure proper page rendering and crawling behavior. They provide essential instructions to browsers and search engines.",
+    problems,
+    solutions,
+    successMessage: "Excellent! Your technical meta tags are properly configured.",
+    rawData: {
+      viewport: !!viewport.length,
+      charset: !!(charset.length || $('meta[http-equiv="Content-Type"]').length),
+      robots: !!robots.length
+    }
+  };
+}
+
+/**
+ * Analyzes Open Graph basic tags (15 points)
+ */
+function analyzeOpenGraphBasic(html: string): MetricCard {
+  const $ = cheerio.load(html);
+  
+  let score = 0;
+  let problems: string[] = [];
+  let solutions: string[] = [];
+
+  // OG Title (4 points)
+  const ogTitle = $('meta[property="og:title"]').first();
+  if (ogTitle.length && ogTitle.attr('content')) {
+    score += 4;
+  } else {
+    problems.push("Open Graph title is missing");
+  }
+
+  // OG Description (4 points)
+  const ogDesc = $('meta[property="og:description"]').first();
+  if (ogDesc.length && ogDesc.attr('content')) {
+    score += 4;
+  } else {
+    problems.push("Open Graph description is missing");
+  }
+
+  // OG Type (3 points)
+  const ogType = $('meta[property="og:type"]').first();
+  if (ogType.length && ogType.attr('content')) {
+    score += 3;
+  } else {
+    problems.push("Open Graph type is missing");
+  }
+
+  // OG URL (4 points)
+  const ogUrl = $('meta[property="og:url"]').first();
+  if (ogUrl.length && ogUrl.attr('content')) {
+    score += 4;
+  } else {
+    problems.push("Open Graph URL is missing");
+  }
+
+  if (problems.length > 0) {
+    solutions.push(
+      "Add Open Graph title for social sharing optimization",
+      "Include Open Graph description for social previews",
+      "Set appropriate Open Graph type (article, website, etc.)",
+      "Specify canonical URL with og:url property"
+    );
+  }
+
+  return {
+    id: 'open-graph-basic',
+    name: 'Open Graph Basic Tags',
+    score,
+    maxScore: 15,
+    status: getPerformanceStatus(score, 15),
+    explanation: "Open Graph tags control how your content appears when shared on social media platforms. They're also used by AI for content understanding and categorization.",
+    problems,
+    solutions,
+    successMessage: "Great! Your Open Graph tags are complete for social sharing.",
+    rawData: {
+      title: !!(ogTitle.length && ogTitle.attr('content')),
+      description: !!(ogDesc.length && ogDesc.attr('content')),
+      type: !!(ogType.length && ogType.attr('content')),
+      url: !!(ogUrl.length && ogUrl.attr('content'))
+    }
+  };
+}
+
+/**
+ * Analyzes Open Graph image (10 points)
+ */
+function analyzeOpenGraphImage(html: string): MetricCard {
+  const $ = cheerio.load(html);
+  
+  let score = 0;
+  let problems: string[] = [];
+  let solutions: string[] = [];
+
+  // OG Image (7 points)
+  const ogImage = $('meta[property="og:image"]').first();
+  if (ogImage.length && ogImage.attr('content')) {
+    score += 7;
+    
+    // Image dimensions bonus (3 points)
+    const ogImageWidth = $('meta[property="og:image:width"]').first();
+    const ogImageHeight = $('meta[property="og:image:height"]').first();
+    if (ogImageWidth.length && ogImageHeight.length) {
+      score += 3;
+    } else {
+      problems.push("Open Graph image dimensions are missing");
+    }
+  } else {
+    problems.push("Open Graph image is missing");
+  }
+
+  if (problems.length > 0) {
+    solutions.push(
+      "Add Open Graph image for better social media appearance",
+      "Include image dimensions (og:image:width, og:image:height)",
+      "Use high-quality images (minimum 1200x630 pixels recommended)",
+      "Ensure image URLs are absolute and accessible"
+    );
+  }
+
+  return {
+    id: 'open-graph-image',
+    name: 'Open Graph Image',
+    score,
+    maxScore: 10,
+    status: getPerformanceStatus(score, 10),
+    explanation: "Open Graph images significantly improve social media engagement and help AI understand visual content context. Proper image metadata ensures consistent display across platforms.",
+    problems,
+    solutions,
+    successMessage: "Perfect! Your Open Graph image is properly configured.",
+    rawData: {
+      image: !!(ogImage.length && ogImage.attr('content')),
+      dimensions: !!($('meta[property="og:image:width"]').length && $('meta[property="og:image:height"]').length)
+    }
+  };
+}
+
+// ===== MAIN ANALYZER =====
+
+/**
+ * Complete structured data analysis according to new architecture
+ */
+export function analyzeStructuredData(html: string, url: string): StructuredDataAnalysisResult {
+  try {
+    // Input validation
+    if (!html || typeof html !== 'string') {
+      throw new Error('HTML content required for structured data analysis');
+    }
+
+    // Parse JSON-LD data
+    const jsonldData = parseJSONLD(html);
+
+    // Individual metric analyses
+    const jsonldPresenceCard = analyzeJSONLDPresence(jsonldData);
+    const schemaTypesCard = analyzeSchemaTypesCompleteness(jsonldData);
+    const titleCard = analyzeTitleTag(html);
+    const descriptionCard = analyzeMetaDescription(html);
+    const technicalMetaCard = analyzeTechnicalMeta(html);
+    const ogBasicCard = analyzeOpenGraphBasic(html);
+    const ogImageCard = analyzeOpenGraphImage(html);
+
+    // Build drawers (DrawerSubSection)
+    const jsonldDrawer: DrawerSubSection = {
+      id: 'jsonld-analysis',
+      name: 'JSON-LD Analysis',
+      description: 'Structured data markup for enhanced understanding',
+      totalScore: jsonldPresenceCard.score + schemaTypesCard.score,
+      maxScore: 40,
+      status: getPerformanceStatus(jsonldPresenceCard.score + schemaTypesCard.score, 40),
+      cards: [jsonldPresenceCard, schemaTypesCard]
     };
-    
+
+    const metaTagsDrawer: DrawerSubSection = {
+      id: 'meta-tags-analysis',
+      name: 'Meta Tags Analysis',
+      description: 'Essential metadata for search engines',
+      totalScore: titleCard.score + descriptionCard.score + technicalMetaCard.score,
+      maxScore: 35,
+      status: getPerformanceStatus(titleCard.score + descriptionCard.score + technicalMetaCard.score, 35),
+      cards: [titleCard, descriptionCard, technicalMetaCard]
+    };
+
+    const socialMetaDrawer: DrawerSubSection = {
+      id: 'social-meta-analysis',
+      name: 'Social Meta Analysis',
+      description: 'Open Graph tags for social sharing',
+      totalScore: ogBasicCard.score + ogImageCard.score,
+      maxScore: 25,
+      status: getPerformanceStatus(ogBasicCard.score + ogImageCard.score, 25),
+      cards: [ogBasicCard, ogImageCard]
+    };
+
+    // Total section score
+    const totalScore = jsonldDrawer.totalScore + metaTagsDrawer.totalScore + socialMetaDrawer.totalScore;
+
+    // Build main section
+    const section: MainSection = {
+      id: SECTION_CONFIG.id,
+      name: SECTION_CONFIG.name,
+      emoji: SECTION_CONFIG.emoji,
+      description: SECTION_CONFIG.description,
+      weightPercentage: SECTION_CONFIG.weightPercentage,
+      totalScore,
+      maxScore: SECTION_CONFIG.maxScore,
+      status: getPerformanceStatus(totalScore, SECTION_CONFIG.maxScore),
+      drawers: [jsonldDrawer, metaTagsDrawer, socialMetaDrawer]
+    };
+
+    // Raw data for debug/export
+    const $ = cheerio.load(html);
+    const rawData = {
+      jsonLdFound: jsonldData.totalScripts > 0,
+      jsonLdValid: jsonldData.validSchemas.length > 0,
+      detectedSchemas: Array.from(new Set(jsonldData.validSchemas)),
+      schemaCompleteness: jsonldData.schemaCompleteness,
+      titleTag: {
+        present: !!$('title').first().text().trim(),
+        length: $('title').first().text().trim().length,
+        text: $('title').first().text().trim()
+      },
+      metaDescription: {
+        present: !!$('meta[name="description"]').first().attr('content'),
+        length: ($('meta[name="description"]').first().attr('content') || '').length,
+        text: $('meta[name="description"]').first().attr('content') || ''
+      },
+      technicalMeta: {
+        viewport: !!$('meta[name="viewport"]').length,
+        charset: !!($('meta[charset]').length || $('meta[http-equiv="Content-Type"]').length),
+        robots: !!$('meta[name="robots"]').length
+      },
+      openGraph: {
+        title: !!$('meta[property="og:title"]').first().attr('content'),
+        description: !!$('meta[property="og:description"]').first().attr('content'),
+        image: !!$('meta[property="og:image"]').first().attr('content'),
+        url: !!$('meta[property="og:url"]').first().attr('content')
+      },
+      totalSchemas: jsonldData.validSchemas.length,
+      diversityBonus: calculateDiversityBonus(jsonldData.validSchemas) > 0
+    };
+
     return {
-      score: 0,
-      maxScore: maxScores[category] || 0,
-      status: 'fail',
-      details: error,
-      breakdown: { error }
+      section,
+      rawData
+    };
+
+  } catch (error) {
+    // Error handling with minimal section
+    const errorSection: MainSection = {
+      id: SECTION_CONFIG.id,
+      name: SECTION_CONFIG.name,
+      emoji: SECTION_CONFIG.emoji,
+      description: 'Analysis error occurred',
+      weightPercentage: SECTION_CONFIG.weightPercentage,
+      totalScore: 0,
+      maxScore: SECTION_CONFIG.maxScore,
+      status: 'error',
+      drawers: []
+    };
+
+    return {
+      section: errorSection,
+      rawData: {
+        jsonLdFound: false,
+        jsonLdValid: false,
+        detectedSchemas: [],
+        schemaCompleteness: {},
+        titleTag: { present: false, length: 0, text: '' },
+        metaDescription: { present: false, length: 0, text: '' },
+        technicalMeta: { viewport: false, charset: false, robots: false },
+        openGraph: { title: false, description: false, image: false, url: false },
+        totalSchemas: 0,
+        diversityBonus: false,
+        error: (error as Error).message
+      }
     };
   }
 }
 
-// Export types for external use
-export type { 
-  StructuredDataResult,
-  CriteriaWeights,
-  CompletenessValidation,
-  ValidationDetails,
-  AnalysisResult,
-  TitleAnalysis,
-  DescriptionAnalysis,
-  TechnicalMetaAnalysis,
-  ImageValidation,
-  UrlContext,
-  Recommendation
+// ===== EXPORTS =====
+
+export {
+  SCHEMA_WEIGHTS,
+  UNKNOWN_SCHEMA_BONUS,
+  REQUIRED_SCHEMA_FIELDS,
+  parseJSONLD,
+  calculateDiversityBonus,
+  analyzeJSONLDPresence,
+  analyzeSchemaTypesCompleteness,
+  analyzeTitleTag,
+  analyzeMetaDescription,
+  analyzeTechnicalMeta,
+  analyzeOpenGraphBasic,
+  analyzeOpenGraphImage
 };
 
-export default StructuredDataAnalyzer; 
+export type {
+  StructuredDataAnalysisResult,
+  JSONLDData
+}; 

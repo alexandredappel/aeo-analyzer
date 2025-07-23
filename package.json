@@ -1,6 +1,8 @@
 {
-  "name": "aeo-analyzer",
-  "version": "0.1.0",
+  "name": "aeo-auditor",
+  "version": "2.0.0",
+  "description": "Generative Engine Optimization (GEO) auditing tool with modern hierarchical interface",
+  "keywords": ["geo", "generative engine optimization", "ai optimization", "ai analysis"],
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",

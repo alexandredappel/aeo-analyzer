@@ -1,1504 +1,1180 @@
 /**
- * LLM-Friendly Formatting Analyzer for AEO Auditor
- * Analyzes content structure to optimize pages for LLM comprehension and parsing
- * Evaluates heading hierarchy, semantic HTML5, structured content, and navigation
+ * LLM FORMATTING ANALYZER - PHASE 4A: NEW HIERARCHICAL ARCHITECTURE
+ * 
+ * Analyzes LLM-friendly formatting for AI understanding (25% of total score)
+ * Architecture: 🤖 LLM FORMATTING → Heading + Semantic + Links + Technical → MetricCards
+ * 
+ * Uses SharedSemanticHTML5Analyzer to eliminate duplication with Accessibility
  */
 
 import * as cheerio from 'cheerio';
-import logger from '@/utils/logger';
+import { 
+  MetricCard, 
+  DrawerSubSection, 
+  MainSection, 
+  PerformanceStatus 
+} from '@/types/analysis-architecture';
+import { 
+  SharedSemanticHTML5Analyzer,
+  SharedSemanticHTML5Result 
+} from '@/services/shared/semantic-html5-analyzer';
 
-// Types and interfaces
-interface CriteriaWeights {
-  headingStructure: {
-    hierarchy: number;
-    quality: number;
-    semanticValue: number;
-  };
-  semanticElements: {
-    structure: number;
-    accessibility: number;
-    contentFlow: number;
-  };
-  contentOrganization: {
-    readability: number;
-    structure: number;
-    density: number;
-  };
-  linkQuality: {
-    internal: number;
-    external: number;
-    context: number;
-  };
-}
+// ===== INTERFACES AND TYPES =====
 
-interface ContentTypePattern {
-  selectors: string[];
-  patterns: string[];
-  weight: number;
-}
-
-interface ContentTypePatterns {
-  article: ContentTypePattern;
-  product: ContentTypePattern;
-  documentation: ContentTypePattern;
-  corporate: ContentTypePattern;
-}
-
-interface AdvancedCache {
-  contentAnalysis: Map<string, CacheEntry>;
-  readabilityMetrics: Map<string, CacheEntry>;
-  accessibilityScores: Map<string, CacheEntry>;
-  linkAnalysis: Map<string, CacheEntry>;
-}
-
-interface CacheEntry {
-  data: any;
-  timestamp: number;
-}
-
-interface CacheConfig {
-  defaultTTL: number;
-  maxSize: number;
-  checkPeriod: number;
-}
-
-interface PriorityWeight {
-  critical: number;
-  high: number;
-  medium: number;
-  low: number;
-}
-
-interface ContentType {
-  primary: string;
-  confidence: number;
-  alternatives: Array<{ type: string; confidence: number }>;
-}
-
-interface HeadingStructure {
-  h1: number;
-  h2: number;
-  h3: number;
-  h4: number;
-  h5: number;
-  h6: number;
-}
-
-interface HierarchyAnalysis {
-  hasH1: boolean;
-  multipleH1: boolean;
-  logicalOrder: boolean;
-  skipLevels: string[];
-  maxDepth: number;
-  sequence: number[];
-}
-
-interface HeadingContentAnalysis {
-  total: number;
-  emptyHeadings: number;
-  tooShort: number;
-  averageLength: number;
-}
-
-interface AnalysisResult {
-  score: number;
-  maxScore: number;
-  status: string;
-  details: string;
-  breakdown: any;
-}
-
-interface HeadingContentAdvanced {
-  total: number;
-  averageLength: number;
-  descriptiveness: number;
-  duplicates: number;
-  keywordStuffing: boolean;
-}
-
-interface HeadingSemanticValue {
-  informationScent: number;
-  navigationValue: number;
-  expectedTermsFound: number;
-  contentTypeAlignment: number;
-}
-
-interface SemanticStructureAnalysis {
-  structural: Record<string, number>;
-  content: Record<string, number>;
-  semanticCount: number;
-  totalElements: number;
-  semanticRatio: number;
-}
-
-interface AccessibilityFeatures {
-  score: number;
-  features: {
-    ariaLabels: number;
-    ariaDescribedBy: number;
-    altTexts: number;
-    totalImages: number;
-    skipLinks: number;
-    headingStructure: boolean;
+interface LLMFormattingAnalysisResult {
+  section: MainSection;
+  rawData: {
+    headingStructure: {
+      hierarchy: boolean;
+      h1Count: number;
+      totalHeadings: number;
+      maxLevel: number;
+      quality: number;
+    };
+    semanticHTML5: SharedSemanticHTML5Result;
+    linkQuality: {
+      internalCount: number;
+      externalCount: number;
+      descriptiveCount: number;
+      totalLinks: number;
+      contextualityScore: number;
+    };
+    technicalStructure: {
+      validHTML: boolean;
+      cleanMarkup: number;
+      navigationScore: number;
+      breadcrumbsPresent: boolean;
+    };
+    totalScore: number;
+    error?: string;
   };
 }
 
-interface ContentFlow {
-  logicalFlow: number;
-  hasMain: boolean;
-  hasHeader: boolean;
-  hasFooter: boolean;
-  hasNav: boolean;
-  articleStructure: boolean;
-  sectionHierarchy: boolean;
+interface HeadingAnalysis {
+  hierarchy: { valid: boolean; issues: string[] };
+  quality: { score: number; issues: string[] };
+  semanticValue: { score: number; issues: string[] };
+  h1Count: number;
+  totalHeadings: number;
+  maxLevel: number;
+  headings: Array<{ level: number; text: string; descriptive: boolean }>;
 }
 
-interface StructureAnalysis {
-  score: number;
-  paragraphCount: number;
-  averageParagraphLength: number;
-  wellStructuredParagraphs: number;
+interface LinkQualityAnalysis {
+  internal: { count: number; descriptive: number; score: number; issues: string[] };
+  external: { count: number; descriptive: number; authoritative: number; score: number; issues: string[] };
+  context: { score: number; issues: string[] };
+  totalLinks: number;
+  descriptiveRatio: number;
 }
 
-interface ReadabilityAnalysis {
-  score: number;
-  level: string;
-  complexity: number;
-  wordCount: number;
-  sentenceCount: number;
+interface TechnicalStructureAnalysis {
+  cleanMarkup: { score: number; issues: string[] };
+  navigation: { score: number; issues: string[] };
+  breadcrumbs: { present: boolean; score: number };
+  validHTML: boolean;
 }
 
-interface DensityAnalysis {
-  textLength: number;
-  htmlLength: number;
-  ratio: number;
-  score: number;
-}
+// ===== CONSTANTS =====
 
-interface LinkAnalysis {
-  internal: { count: number; descriptive: number; contextual: number };
-  external: { count: number; descriptive: number; authority: number };
-  context: { total: number; descriptive: number; generic: number };
-}
-
-interface AccessibilityValidation {
-  wcagCompliance: number;
-  issues: string[];
-  warnings: string[];
-  screenReaderFriendly: boolean;
-}
-
-interface LLMOptimization {
-  llmOptimizationScore: number;
-  llmSpecificIssues: string[];
-  optimizationSuggestions: string[];
-}
-
-interface Recommendation {
-  priority: 'critical' | 'high' | 'medium' | 'low';
-  category: string;
-  issue: string;
-  action: string;
-  impact: string;
-  effort?: string;
-}
-
-interface ValidationResult {
-  valid: boolean;
-  issues: string[];
-  warnings: string[];
-}
-
-interface LLMFormattingResult {
-  score: number;
-  maxScore: number;
-  breakdown: {
-    headingStructure: AnalysisResult;
-    semanticElements: AnalysisResult;
-    structuredContent: AnalysisResult;
-    citationsReferences: AnalysisResult;
-  };
-  recommendations: string[];
-  validation: ValidationResult;
-  metadata: {
-    analyzedAt: string;
-    version: string;
-    features: string[];
-  };
-  error?: string;
-}
-
-export class LLMFormattingAnalyzer {
-  private maxScore: number;
-  private criteria: CriteriaWeights;
-  private advancedCache: AdvancedCache;
-  private cacheConfig: CacheConfig;
-  private contentTypePatterns: ContentTypePatterns;
-  private priorityWeight: PriorityWeight;
-
-  constructor() {
-    this.maxScore = 100;
-    
-    // Advanced weighted scoring criteria (total 100 points)
-    this.criteria = {
-      headingStructure: {
-        hierarchy: 15,        // Logical H1-H6 structure
-        quality: 10,          // Content quality and descriptiveness
-        semanticValue: 10     // Information scent and navigation value
-      },
-      semanticElements: {
-        structure: 12,        // Proper semantic HTML5 usage
-        accessibility: 8,     // ARIA labels and landmarks
-        contentFlow: 10       // Logical document outline
-      },
-      contentOrganization: {
-        readability: 12,      // Text complexity and clarity
-        structure: 8,         // Paragraph and section organization
-        density: 5            // Content-to-markup ratio
-      },
-      linkQuality: {
-        internal: 8,          // Internal link structure
-        external: 5,          // External link quality
-        context: 7            // Link context and relevance
-      }
-    };
-
-    // Advanced cache with TTL and multi-level support
-    this.advancedCache = {
-      contentAnalysis: new Map(),
-      readabilityMetrics: new Map(),
-      accessibilityScores: new Map(),
-      linkAnalysis: new Map()
-    };
-    
-    // Cache configuration
-    this.cacheConfig = {
-      defaultTTL: 3600000, // 1 hour
-      maxSize: 1000,
-      checkPeriod: 600000  // 10 minutes
-    };
-    
-    // Content type detection patterns
-    this.contentTypePatterns = {
-      article: {
-        selectors: ['article', '[role="article"]', '.post', '.article', '.blog-post'],
-        patterns: ['blog', 'news', 'post', 'article', 'story'],
-        weight: 0
-      },
-      product: {
-        selectors: ['.product', '[itemtype*="Product"]', '.item', '.price', '.buy-now'],
-        patterns: ['shop', 'product', 'item', 'buy', 'price', 'cart', 'store'],
-        weight: 0
-      },
-      documentation: {
-        selectors: ['.docs', '.documentation', '.guide', '.api-docs', '.manual'],
-        patterns: ['docs', 'guide', 'api', 'reference', 'manual', 'tutorial'],
-        weight: 0
-      },
-      corporate: {
-        selectors: ['.about', '.company', '.team', '.corporate'],
-        patterns: ['about', 'company', 'team', 'contact', 'corporate', 'business'],
-        weight: 0
-      }
-    };
-    
-    // Priority weights for recommendations
-    this.priorityWeight = { critical: 0, high: 1, medium: 2, low: 3 };
-  }
-
-  /**
-   * Advanced analysis method for LLM-friendly formatting
-   * @param htmlContent - HTML content to analyze
-   * @param url - URL being analyzed
-   * @returns Analysis results with scoring and recommendations
-   */
-  async analyze(htmlContent: string, url: string): Promise<LLMFormattingResult> {
-    logger.info('Starting advanced LLM-friendly formatting analysis...');
-    
-    try {
-      if (!htmlContent || typeof htmlContent !== 'string') {
-        throw new Error('Invalid HTML content provided');
-      }
-
-      // Check advanced cache first
-      const cacheKey = `llm-advanced:${url}`;
-      if (this.advancedCache.contentAnalysis.has(cacheKey)) {
-        const cached = this.advancedCache.contentAnalysis.get(cacheKey);
-        if (cached && Date.now() - cached.timestamp < this.cacheConfig.defaultTTL) {
-          logger.info('Returning cached advanced LLM formatting analysis');
-          return cached.data;
-        }
-      }
-
-      const $ = cheerio.load(htmlContent);
-      
-      // Detect content type for specialized analysis
-      const contentType = this.detectContentType(htmlContent, url);
-      logger.info(`Detected content type: ${contentType.primary} (confidence: ${contentType.confidence})`);
-      
-      // Advanced parallel analysis
-      const [headingResult, semanticResult, contentOrgResult, linkResult] = await Promise.allSettled([
-        this.analyzeHeadingStructureAdvanced($, contentType),
-        this.analyzeSemanticElementsAdvanced($),
-        this.analyzeContentOrganization($),
-        this.analyzeLinkQualityAdvanced($, url)
-      ]);
-
-      // Extract results from Promise.allSettled with enhanced error handling
-      const headings = headingResult.status === 'fulfilled' ? headingResult.value : this.getFailureResult('headingStructure');
-      const semantic = semanticResult.status === 'fulfilled' ? semanticResult.value : this.getFailureResult('semanticElements');
-      const contentOrg = contentOrgResult.status === 'fulfilled' ? contentOrgResult.value : this.getFailureResult('contentOrganization');
-      const links = linkResult.status === 'fulfilled' ? linkResult.value : this.getFailureResult('linkQuality');
-      
-      // Advanced validation
-      const accessibility = await this.validateContentAccessibility($);
-      const llmOptimization = this.validateLLMOptimization({ headings, semantic, contentOrg, links });
-      
-      // Calculate total score with new criteria
-      const totalScore = Math.min(
-        headings.score + semantic.score + contentOrg.score + links.score, 
-        this.maxScore
-      );
-      
-      // Generate advanced context-aware recommendations
-      const recommendations = await this.generateAdvancedRecommendations(
-        { headings, semantic, contentOrg, links }, 
-        url, 
-        contentType
-      );
-      
-      // Create validation object
-      const validation: ValidationResult = {
-        valid: totalScore > 0,
-        issues: [],
-        warnings: []
-      };
-      
-      // Add validation issues based on scores
-      if (headings.score < 20) {
-        validation.issues.push('Poor heading structure affects content organization');
-      }
-      if (semantic.score < 20) {
-        validation.issues.push('Insufficient semantic HTML usage');
-      }
-      if (contentOrg.score < 20) {
-        validation.issues.push('Content organization needs improvement');
-      }
-      if (links.score < 15) {
-        validation.warnings.push('Link quality could be enhanced');
-      }
-      
-      const result: LLMFormattingResult = {
-        score: totalScore,
-        maxScore: this.maxScore,
-        breakdown: {
-          headingStructure: headings,
-          semanticElements: semantic,
-          structuredContent: contentOrg,
-          citationsReferences: links
-        },
-        recommendations,
-        validation,
-        metadata: {
-          analyzedAt: new Date().toISOString(),
-          version: '1.0',
-          features: ['heading-hierarchy', 'semantic-html5', 'structured-content', 'citations-analysis']
-        }
-      };
-      
-      // Cache result
-      this.advancedCache.contentAnalysis.set(cacheKey, {
-        data: result,
-        timestamp: Date.now()
-      });
-      
-      logger.info(`LLM formatting analysis completed. Score: ${totalScore}/${this.maxScore}`);
-      return result;
-      
-    } catch (error) {
-      logger.error(`LLM formatting analysis failed: ${(error as Error).message}`);
-      
-      return {
-        score: 0,
-        maxScore: this.maxScore,
-        breakdown: {
-          headingStructure: this.getFailureResult('headingStructure', (error as Error).message),
-          semanticElements: this.getFailureResult('semanticElements', (error as Error).message),
-          structuredContent: this.getFailureResult('contentOrganization', (error as Error).message),
-          citationsReferences: this.getFailureResult('linkQuality', (error as Error).message)
-        },
-        recommendations: [`❌ LLM formatting analysis failed: ${(error as Error).message}`],
-        validation: { valid: false, issues: [(error as Error).message], warnings: [] },
-        metadata: {
-          analyzedAt: new Date().toISOString(),
-          version: '1.0',
-          features: ['error-recovery']
-        },
-        error: (error as Error).message
-      };
-    }
-  }
-
-  /**
-   * Validate heading hierarchy logic
-   * @param $ - Cheerio instance
-   * @returns Hierarchy validation result
-   */
-  validateHeadingHierarchy($: cheerio.CheerioAPI): HierarchyAnalysis {
-    const headingElements = $('h1, h2, h3, h4, h5, h6').toArray();
-    const headingLevels = headingElements.map(el => parseInt(el.tagName.charAt(1)));
-    
-    let logicalOrder = true;
-    let skipLevels: string[] = [];
-    let maxDepth = Math.max(...headingLevels) || 0;
-    
-    for (let i = 1; i < headingLevels.length; i++) {
-      const current = headingLevels[i];
-      const previous = headingLevels[i - 1];
-      
-      // Check for skipped levels (e.g., h2 -> h4)
-      if (current > previous + 1) {
-        skipLevels.push(`h${previous}->h${current}`);
-        logicalOrder = false;
-      }
-    }
-    
-    return {
-      hasH1: headingLevels.includes(1),
-      multipleH1: headingLevels.filter(level => level === 1).length > 1,
-      logicalOrder,
-      skipLevels: Array.from(new Set(skipLevels)),
-      maxDepth,
-      sequence: headingLevels
-    };
-  }
-
-  /**
-   * Analyze heading content quality
-   * @param $ - Cheerio instance
-   * @returns Content analysis result
-   */
-  analyzeHeadingContent($: cheerio.CheerioAPI): HeadingContentAnalysis {
-    const headings = $('h1, h2, h3, h4, h5, h6');
-    let totalLength = 0;
-    let emptyHeadings = 0;
-    let tooShort = 0;
-    
-    headings.each((i, el) => {
-      const text = $(el).text().trim();
-      totalLength += text.length;
-      
-      if (text.length === 0) {
-        emptyHeadings++;
-      } else if (text.length < 10) {
-        tooShort++;
-      }
-    });
-    
-    return {
-      total: headings.length,
-      emptyHeadings,
-      tooShort,
-      averageLength: headings.length > 0 ? Math.round(totalLength / headings.length) : 0
-    };
-  }
-
-  /**
-   * Detect content type based on HTML structure and URL patterns
-   * @param htmlContent - HTML content to analyze
-   * @param url - URL being analyzed
-   * @returns Content type detection result
-   */
-  detectContentType(htmlContent: string, url: string): ContentType {
-    const $ = cheerio.load(htmlContent);
-    const indicators = JSON.parse(JSON.stringify(this.contentTypePatterns)); // Deep clone
-    
-    try {
-      // Calculate weights for each content type
-      Object.keys(indicators).forEach(type => {
-        const typeData = indicators[type as keyof ContentTypePatterns];
-        
-        // Weight based on selectors
-        typeData.selectors.forEach((selector: string) => {
-          if ($(selector).length > 0) {
-            typeData.weight += 2;
-          }
-        });
-        
-        // Weight based on URL patterns
-        typeData.patterns.forEach((pattern: string) => {
-          if (url.toLowerCase().includes(pattern)) {
-            typeData.weight += 1;
-          }
-        });
-        
-        // Weight based on page text content
-        const pageText = $('body').text().toLowerCase();
-        typeData.patterns.forEach((pattern: string) => {
-          const regex = new RegExp(pattern, 'gi');
-          const matches = pageText.match(regex);
-          if (matches) {
-            typeData.weight += Math.min(matches.length * 0.1, 1);
-          }
-        });
-      });
-      
-      // Sort by weight and return primary type
-      const sortedTypes = Object.entries(indicators)
-        .sort(([,a], [,b]) => (b as ContentTypePattern).weight - (a as ContentTypePattern).weight);
-      
-      return {
-        primary: sortedTypes[0][0],
-        confidence: (sortedTypes[0][1] as ContentTypePattern).weight,
-        alternatives: sortedTypes.slice(1, 3).map(([type, data]) => ({
-          type,
-          confidence: (data as ContentTypePattern).weight
-        }))
-      };
-      
-    } catch (error) {
-      logger.warn(`Content type detection failed: ${(error as Error).message}`);
-      return {
-        primary: 'generic',
-        confidence: 0,
-        alternatives: []
-      };
-    }
-  }
-
-  /**
-   * Advanced heading structure analysis with semantic value assessment
-   * @param $ - Cheerio instance
-   * @param contentType - Detected content type
-   * @returns Advanced heading analysis result
-   */
-  analyzeHeadingStructureAdvanced($: cheerio.CheerioAPI, contentType: ContentType): AnalysisResult {
-    const maxScore = Object.values(this.criteria.headingStructure).reduce((a, b) => a + b, 0);
-    let score = 0;
-    let status = 'fail';
-    let details = '';
-    let breakdown: any = {};
-    
-    try {
-      const headings = $('h1, h2, h3, h4, h5, h6').toArray();
-      
-      if (headings.length === 0) {
-        details = 'No headings found';
-        return { score: 0, maxScore, status, details, breakdown: { noHeadings: true } };
-      }
-      
-      // Basic hierarchy analysis
-      const hierarchyAnalysis = this.validateHeadingHierarchy($);
-      breakdown.hierarchy = hierarchyAnalysis;
-      
-      // Content quality analysis
-      const contentAnalysis = this.analyzeHeadingContentAdvanced($);
-      breakdown.content = contentAnalysis;
-      
-      // Semantic value analysis
-      const semanticAnalysis = this.analyzeHeadingSemanticValue($, contentType);
-      breakdown.semantic = semanticAnalysis;
-      
-      // Hierarchy scoring (15 points)
-      if (hierarchyAnalysis.hasH1 && !hierarchyAnalysis.multipleH1 && hierarchyAnalysis.logicalOrder) {
-        score += this.criteria.headingStructure.hierarchy;
-      } else if (hierarchyAnalysis.hasH1 && hierarchyAnalysis.logicalOrder) {
-        score += this.criteria.headingStructure.hierarchy * 0.8;
-      } else if (hierarchyAnalysis.hasH1) {
-        score += this.criteria.headingStructure.hierarchy * 0.5;
-      }
-      
-      // Quality scoring (10 points)
-      if (contentAnalysis.descriptiveness > 80) {
-        score += this.criteria.headingStructure.quality;
-      } else if (contentAnalysis.descriptiveness > 60) {
-        score += this.criteria.headingStructure.quality * 0.8;
-      } else if (contentAnalysis.descriptiveness > 40) {
-        score += this.criteria.headingStructure.quality * 0.5;
-      }
-      
-      // Semantic value scoring (10 points)
-      if (semanticAnalysis.informationScent > 80) {
-        score += this.criteria.headingStructure.semanticValue;
-      } else if (semanticAnalysis.informationScent > 60) {
-        score += this.criteria.headingStructure.semanticValue * 0.8;
-      } else if (semanticAnalysis.informationScent > 40) {
-        score += this.criteria.headingStructure.semanticValue * 0.5;
-      }
-      
-      // Generate advanced details
-      details = `${headings.length} headings. Hierarchy: ${hierarchyAnalysis.logicalOrder ? 'logical' : 'broken'}, Quality: ${Math.round(contentAnalysis.descriptiveness)}%, Semantic value: ${Math.round(semanticAnalysis.informationScent)}%`;
-      
-      // Determine status
-      if (score >= maxScore * 0.8) {
-        status = 'excellent';
-      } else if (score >= maxScore * 0.6) {
-        status = 'good';
-      } else if (score >= maxScore * 0.3) {
-        status = 'partial';
-      }
-      
-    } catch (error) {
-      logger.error(`Advanced heading analysis error: ${(error as Error).message}`);
-      details = `Heading analysis error: ${(error as Error).message}`;
-      breakdown = { error: (error as Error).message };
-    }
-    
-    return { score: Math.min(score, maxScore), maxScore, status, details, breakdown };
-  }
-
-  /**
-   * Analyze heading content quality with advanced metrics
-   * @param $ - Cheerio instance
-   * @returns Advanced content analysis
-   */
-  analyzeHeadingContentAdvanced($: cheerio.CheerioAPI): HeadingContentAdvanced {
-    const headings = $('h1, h2, h3, h4, h5, h6');
-    let totalLength = 0;
-    let descriptiveCount = 0;
-    let duplicates = 0;
-    let keywordStuffing = false;
-    
-    const headingTexts: string[] = [];
-    
-    headings.each((i, el) => {
-      const text = $(el).text().trim();
-      headingTexts.push(text.toLowerCase());
-      totalLength += text.length;
-      
-      // Check descriptiveness (avoid generic terms)
-      const genericTerms = ['click here', 'read more', 'learn more', 'here', 'more', 'link',
-      'this', 'continue', 'next', 'previous', 'go', 'see more'];
-      const isDescriptive = !genericTerms.some(term => text.toLowerCase().includes(term)) && text.length > 5;
-      if (isDescriptive) descriptiveCount++;
-      
-      // Check for keyword stuffing (repeated words)
-      const words = text.toLowerCase().split(/\s+/);
-      const wordCounts: Record<string, number> = {};
-      words.forEach(word => {
-        if (word.length > 3) {
-          wordCounts[word] = (wordCounts[word] || 0) + 1;
-          if (wordCounts[word] > 3) keywordStuffing = true;
-        }
-      });
-    });
-    
-    // Check for duplicates
-    const uniqueTexts = new Set(headingTexts);
-    duplicates = headingTexts.length - uniqueTexts.size;
-    
-    const descriptiveness = headings.length > 0 ? (descriptiveCount / headings.length) * 100 : 0;
-    
-    return {
-      total: headings.length,
-      averageLength: headings.length > 0 ? Math.round(totalLength / headings.length) : 0,
-      descriptiveness,
-      duplicates,
-      keywordStuffing
-    };
-  }
-
-  /**
-   * Analyze heading semantic value for LLM understanding
-   * @param $ - Cheerio instance
-   * @param contentType - Content type context
-   * @returns Semantic value analysis
-   */
-  analyzeHeadingSemanticValue($: cheerio.CheerioAPI, contentType: ContentType): HeadingSemanticValue {
-    const headings = $('h1, h2, h3, h4, h5, h6');
-    let informationScent = 0;
-    let navigationValue = 0;
-    
-    // Content type specific analysis
-    const expectations: Record<string, string[]> = {
-      article: ['introduction', 'conclusion', 'summary', 'analysis'],
-      documentation: ['overview', 'installation', 'usage', 'examples', 'api'],
-      product: ['features', 'specifications', 'pricing', 'reviews'],
-      corporate: ['mission', 'team', 'services', 'portfolio']
-    };
-    
-    const expectedTerms = expectations[contentType.primary] || [];
-    let expectedTermsFound = 0;
-    
-    headings.each((i, el) => {
-      const text = $(el).text().toLowerCase();
-      
-      // Check for expected content type terms
-      expectedTerms.forEach(term => {
-        if (text.includes(term)) expectedTermsFound++;
-      });
-      
-      // Evaluate information scent (how well heading previews content)
-      const words = text.split(/\s+/).length;
-      if (words >= 3 && words <= 8) {
-        informationScent += 20;
-      } else if (words >= 2) {
-        informationScent += 10;
-      }
-    });
-    
-    // Calculate scores
-    informationScent = Math.min(informationScent, 100);
-    navigationValue = expectedTerms.length > 0 ? (expectedTermsFound / expectedTerms.length) * 100 : 50;
-    
-    return {
-      informationScent,
-      navigationValue,
-      expectedTermsFound,
-      contentTypeAlignment: navigationValue
-    };
-  }
-
-  /**
-   * Advanced semantic elements analysis with accessibility focus
-   * @param $ - Cheerio instance
-   * @returns Advanced semantic analysis result
-   */
-  analyzeSemanticElementsAdvanced($: cheerio.CheerioAPI): AnalysisResult {
-    const maxScore = Object.values(this.criteria.semanticElements).reduce((a, b) => a + b, 0);
-    let score = 0;
-    let status = 'fail';
-    let details = '';
-    let breakdown: any = {};
-    
-    try {
-      // Enhanced semantic structure analysis
-      const structureAnalysis = this.analyzeSemanticStructure($);
-      breakdown.structure = structureAnalysis;
-      
-      // Accessibility analysis
-      const accessibilityAnalysis = this.analyzeAccessibilityFeatures($);
-      breakdown.accessibility = accessibilityAnalysis;
-      
-      // Content flow analysis
-      const contentFlowAnalysis = this.analyzeContentFlow($);
-      breakdown.contentFlow = contentFlowAnalysis;
-      
-      // Structure scoring (12 points)
-      if (structureAnalysis.semanticRatio > 0.15) {
-        score += this.criteria.semanticElements.structure;
-      } else if (structureAnalysis.semanticRatio > 0.08) {
-        score += this.criteria.semanticElements.structure * 0.7;
-      } else if (structureAnalysis.semanticRatio > 0.03) {
-        score += this.criteria.semanticElements.structure * 0.4;
-      }
-      
-      // Accessibility scoring (8 points)
-      if (accessibilityAnalysis.score > 80) {
-        score += this.criteria.semanticElements.accessibility;
-      } else if (accessibilityAnalysis.score > 60) {
-        score += this.criteria.semanticElements.accessibility * 0.7;
-      } else if (accessibilityAnalysis.score > 40) {
-        score += this.criteria.semanticElements.accessibility * 0.4;
-      }
-      
-      // Content flow scoring (10 points)
-      if (contentFlowAnalysis.logicalFlow > 80) {
-        score += this.criteria.semanticElements.contentFlow;
-      } else if (contentFlowAnalysis.logicalFlow > 60) {
-        score += this.criteria.semanticElements.contentFlow * 0.7;
-      } else if (contentFlowAnalysis.logicalFlow > 40) {
-        score += this.criteria.semanticElements.contentFlow * 0.4;
-      }
-      
-      details = `Semantic ratio: ${Math.round(structureAnalysis.semanticRatio * 100)}%, Accessibility: ${Math.round(accessibilityAnalysis.score)}%, Flow: ${Math.round(contentFlowAnalysis.logicalFlow)}%`;
-      
-      // Determine status
-      if (score >= maxScore * 0.8) {
-        status = 'excellent';
-      } else if (score >= maxScore * 0.6) {
-        status = 'good';
-      } else if (score >= maxScore * 0.3) {
-        status = 'partial';
-      }
-      
-    } catch (error) {
-      logger.error(`Advanced semantic analysis error: ${(error as Error).message}`);
-      details = `Semantic analysis error: ${(error as Error).message}`;
-      breakdown = { error: (error as Error).message };
-    }
-    
-    return { score: Math.min(score, maxScore), maxScore, status, details, breakdown };
-  }
-
-  /**
-   * Analyze semantic structure with enhanced metrics
-   * @param $ - Cheerio instance
-   * @returns Semantic structure analysis
-   */
-  analyzeSemanticStructure($: cheerio.CheerioAPI): SemanticStructureAnalysis {
-    const structural = {
-      article: $('article').length,
-      section: $('section').length,
-      nav: $('nav').length,
-      aside: $('aside').length,
-      header: $('header').length,
-      footer: $('footer').length,
-      main: $('main').length
-    };
-    
-    const content = {
-      figure: $('figure').length,
-      figcaption: $('figcaption').length,
-      blockquote: $('blockquote').length,
-      cite: $('cite').length,
-      time: $('time').length,
-      address: $('address').length
-    };
-    
-    const semanticCount = Object.values(structural).reduce((a, b) => a + b, 0) + 
-                         Object.values(content).reduce((a, b) => a + b, 0);
-    const totalElements = $('*').length;
-    const semanticRatio = totalElements > 0 ? semanticCount / totalElements : 0;
-    
-    return {
-      structural,
-      content,
-      semanticCount,
-      totalElements,
-      semanticRatio
-    };
-  }
-
-  /**
-   * Analyze accessibility features
-   * @param $ - Cheerio instance
-   * @returns Accessibility analysis
-   */
-  analyzeAccessibilityFeatures($: cheerio.CheerioAPI): AccessibilityFeatures {
-    let score = 0;
-    const features = {
-      ariaLabels: $('[aria-label]').length,
-      ariaDescribedBy: $('[aria-describedby]').length,
-      altTexts: $('img[alt]').length,
-      totalImages: $('img').length,
-      skipLinks: $('a[href^="#"]').filter((i, el) => $(el).text().toLowerCase().includes('skip')).length,
-      headingStructure: $('h1').length === 1 && $('h1, h2, h3, h4, h5, h6').length > 0
-    };
-    
-    // Calculate accessibility score
-    if (features.ariaLabels > 0) score += 20;
-    if (features.totalImages > 0 && features.altTexts / features.totalImages > 0.8) score += 20;
-    if (features.skipLinks > 0) score += 15;
-    if (features.headingStructure) score += 25;
-    if (features.ariaDescribedBy > 0) score += 10;
-    
-    return { score: Math.min(score, 100), features };
-  }
-
-  /**
-   * Analyze content flow and logical structure
-   * @param $ - Cheerio instance
-   * @returns Content flow analysis
-   */
-  analyzeContentFlow($: cheerio.CheerioAPI): ContentFlow {
-    let logicalFlow = 0;
-    const analysis = {
-      hasMain: $('main').length > 0,
-      hasHeader: $('header').length > 0,
-      hasFooter: $('footer').length > 0,
-      hasNav: $('nav').length > 0,
-      articleStructure: $('article').length > 0 || $('[role="article"]').length > 0,
-      sectionHierarchy: $('section').length > 0
-    };
-    
-    // Calculate logical flow score
-    Object.values(analysis).forEach(value => {
-      if (value) logicalFlow += 16.67; // Each element contributes ~16.67% to 100%
-    });
-    
-    return { logicalFlow: Math.min(logicalFlow, 100), ...analysis };
-  }
-
-  /**
-   * Analyze content organization and readability
-   * @param $ - Cheerio instance
-   * @returns Content organization analysis
-   */
-  analyzeContentOrganization($: cheerio.CheerioAPI): AnalysisResult {
-    const maxScore = Object.values(this.criteria.contentOrganization).reduce((a, b) => a + b, 0);
-    let score = 0;
-    let status = 'fail';
-    let details = '';
-    let breakdown: any = {};
-    
-    try {
-      // Structure analysis
-      const structureAnalysis = this.analyzeContentStructure($);
-      breakdown.structure = structureAnalysis;
-      
-      // Readability analysis
-      const readabilityAnalysis = this.analyzeReadability($);
-      breakdown.readability = readabilityAnalysis;
-      
-      // Density analysis
-      const densityAnalysis = this.analyzeContentDensity($);
-      breakdown.density = densityAnalysis;
-      
-      // Readability scoring (12 points)
-      if (readabilityAnalysis.score > 80) {
-        score += this.criteria.contentOrganization.readability;
-      } else if (readabilityAnalysis.score > 60) {
-        score += this.criteria.contentOrganization.readability * 0.7;
-      } else if (readabilityAnalysis.score > 40) {
-        score += this.criteria.contentOrganization.readability * 0.4;
-      }
-      
-      // Structure scoring (8 points)
-      if (structureAnalysis.score > 80) {
-        score += this.criteria.contentOrganization.structure;
-      } else if (structureAnalysis.score > 60) {
-        score += this.criteria.contentOrganization.structure * 0.7;
-      } else if (structureAnalysis.score > 40) {
-        score += this.criteria.contentOrganization.structure * 0.4;
-      }
-      
-      // Density scoring (5 points)
-      if (densityAnalysis.ratio > 0.5) {
-        score += this.criteria.contentOrganization.density;
-      } else if (densityAnalysis.ratio > 0.3) {
-        score += this.criteria.contentOrganization.density * 0.7;
-      } else if (densityAnalysis.ratio > 0.2) {
-        score += this.criteria.contentOrganization.density * 0.4;
-      }
-      
-      details = `Readability: ${readabilityAnalysis.level}, Structure: ${structureAnalysis.score > 70 ? 'good' : 'fair'}, Density: ${Math.round(densityAnalysis.ratio * 100)}%`;
-      
-      // Determine status
-      if (score >= maxScore * 0.8) {
-        status = 'excellent';
-      } else if (score >= maxScore * 0.6) {
-        status = 'good';
-      } else if (score >= maxScore * 0.3) {
-        status = 'partial';
-      }
-      
-    } catch (error) {
-      logger.error(`Content organization analysis error: ${(error as Error).message}`);
-      details = `Content analysis error: ${(error as Error).message}`;
-      breakdown = { error: (error as Error).message };
-    }
-    
-    return { score: Math.min(score, maxScore), maxScore, status, details, breakdown };
-  }
-
-  /**
-   * Analyze content structure quality
-   * @param $ - Cheerio instance
-   * @returns Structure analysis
-   */
-  analyzeContentStructure($: cheerio.CheerioAPI): StructureAnalysis {
-    const paragraphs = $('p');
-    let score = 0;
-    
-    const analysis = {
-      paragraphCount: paragraphs.length,
-      averageParagraphLength: 0,
-      wellStructuredParagraphs: 0
-    };
-    
-    if (paragraphs.length > 0) {
-      let totalLength = 0;
-      paragraphs.each((i, el) => {
-        const text = $(el).text().trim();
-        totalLength += text.length;
-        
-        // Well-structured paragraph: 50-500 characters
-        if (text.length >= 50 && text.length <= 500) {
-          analysis.wellStructuredParagraphs++;
-        }
-      });
-      
-      analysis.averageParagraphLength = Math.round(totalLength / paragraphs.length);
-      
-      // Score based on paragraph quality
-      const wellStructuredRatio = analysis.wellStructuredParagraphs / paragraphs.length;
-      score = wellStructuredRatio * 100;
-    }
-    
-    return { score: Math.min(score, 100), ...analysis };
-  }
-
-  /**
-   * Analyze text readability
-   * @param $ - Cheerio instance
-   * @returns Readability analysis
-   */
-  analyzeReadability($: cheerio.CheerioAPI): ReadabilityAnalysis {
-    const textContent = $('body').text().replace(/\s+/g, ' ').trim();
-    const sentences = textContent.split(/[.!?]+/).filter(s => s.trim().length > 0);
-    const words = textContent.split(/\s+/).filter(w => w.length > 0);
-    
-    if (sentences.length === 0 || words.length === 0) {
-      return { score: 0, level: 'unknown', complexity: 0, wordCount: 0, sentenceCount: 0 };
-    }
-    
-    // Calculate basic readability metrics
-    const avgWordsPerSentence = words.length / sentences.length;
-    const avgSyllablesPerWord = this.estimateSyllables(words);
-    
-    // Simple readability score (based on Flesch formula concept)
-    const readabilityScore = 206.835 - (1.015 * avgWordsPerSentence) - (84.6 * avgSyllablesPerWord);
-    
-    let level = 'advanced';
-    if (readabilityScore > 70) level = 'elementary';
-    else if (readabilityScore > 50) level = 'intermediate';
-    
-    return {
-      score: Math.max(0, Math.min(readabilityScore, 100)),
-      level,
-      complexity: avgWordsPerSentence,
-      wordCount: words.length,
-      sentenceCount: sentences.length
-    };
-  }
-
-  /**
-   * Estimate syllables in words (simple heuristic)
-   * @param words - Array of words
-   * @returns Average syllables per word
-   */
-  estimateSyllables(words: string[]): number {
-    let totalSyllables = 0;
-    
-    words.forEach(word => {
-      word = word.toLowerCase().replace(/[^a-z]/g, '');
-      if (word.length === 0) return;
-      
-      // Simple syllable counting heuristic
-      let syllables = word.split(/[aeiouy]+/).length - 1;
-      if (syllables === 0) syllables = 1;
-      if (word.endsWith('e')) syllables--;
-      totalSyllables += Math.max(1, syllables);
-    });
-    
-    return words.length > 0 ? totalSyllables / words.length : 0;
-  }
-
-  /**
-   * Analyze content density (text to markup ratio)
-   * @param $ - Cheerio instance
-   * @returns Density analysis
-   */
-  analyzeContentDensity($: cheerio.CheerioAPI): DensityAnalysis {
-    const textContent = $('body').text().replace(/\s+/g, ' ').trim();
-    const htmlContent = $.html();
-    
-    const textLength = textContent.length;
-    const htmlLength = htmlContent.length;
-    const ratio = htmlLength > 0 ? textLength / htmlLength : 0;
-    
-    return {
-      textLength,
-      htmlLength,
-      ratio,
-      score: Math.min(ratio * 200, 100) // Normalize to 0-100 scale
-    };
-  }
-
-  /**
-   * Advanced link quality analysis
-   * @param $ - Cheerio instance
-   * @param url - Base URL for internal link detection
-   * @returns Advanced link analysis
-   */
-  analyzeLinkQualityAdvanced($: cheerio.CheerioAPI, url: string): AnalysisResult {
-    const maxScore = Object.values(this.criteria.linkQuality).reduce((a, b) => a + b, 0);
-    let score = 0;
-    let status = 'fail';
-    let details = '';
-    let breakdown: any = {};
-    
-    try {
-      const links = $('a[href]');
-      const baseHost = new URL(url).hostname;
-      
-      const analysis: LinkAnalysis = {
-        internal: { count: 0, descriptive: 0, contextual: 0 },
-        external: { count: 0, descriptive: 0, authority: 0 },
-        context: { total: links.length, descriptive: 0, generic: 0 }
-      };
-      
-      // Analyze each link
-      links.each((i, el) => {
-        const href = $(el).attr('href');
-        const text = $(el).text().trim();
-        const isDescriptive = this.isDescriptiveLink(text);
-        
-        if (isDescriptive) {
-          analysis.context.descriptive++;
-        } else {
-          analysis.context.generic++;
-        }
-        
-        try {
-          if (href) {
-            const linkUrl = new URL(href, url);
-            if (linkUrl.hostname === baseHost) {
-              analysis.internal.count++;
-              if (isDescriptive) analysis.internal.descriptive++;
-              if (this.hasContextualClues($, el)) analysis.internal.contextual++;
-            } else {
-              analysis.external.count++;
-              if (isDescriptive) analysis.external.descriptive++;
-              if (this.isAuthorityDomain(linkUrl.hostname)) analysis.external.authority++;
-            }
-          }
-        } catch (e) {
-          // Invalid URL, skip
-        }
-      });
-      
-      breakdown = analysis;
-      
-      // Internal links scoring (8 points)
-      if (analysis.internal.count > 0) {
-        const internalQuality = analysis.internal.descriptive / analysis.internal.count;
-        if (internalQuality > 0.8) {
-          score += this.criteria.linkQuality.internal;
-        } else if (internalQuality > 0.6) {
-          score += this.criteria.linkQuality.internal * 0.8;
-        } else if (internalQuality > 0.4) {
-          score += this.criteria.linkQuality.internal * 0.5;
-        }
-      }
-      
-      // External links scoring (5 points)
-      if (analysis.external.count > 0) {
-        const externalQuality = (analysis.external.descriptive + analysis.external.authority) / (analysis.external.count * 2);
-        if (externalQuality > 0.7) {
-          score += this.criteria.linkQuality.external;
-        } else if (externalQuality > 0.5) {
-          score += this.criteria.linkQuality.external * 0.8;
-        } else if (externalQuality > 0.3) {
-          score += this.criteria.linkQuality.external * 0.5;
-        }
-      }
-      
-      // Context scoring (7 points)
-      if (analysis.context.total > 0) {
-        const contextQuality = analysis.context.descriptive / analysis.context.total;
-        if (contextQuality > 0.8) {
-          score += this.criteria.linkQuality.context;
-        } else if (contextQuality > 0.6) {
-          score += this.criteria.linkQuality.context * 0.8;
-        } else if (contextQuality > 0.4) {
-          score += this.criteria.linkQuality.context * 0.5;
-        }
-      }
-      
-      const descriptiveRatio = analysis.context.total > 0 ? Math.round((analysis.context.descriptive / analysis.context.total) * 100) : 0;
-      details = `Internal: ${analysis.internal.count}, External: ${analysis.external.count}, Descriptive: ${descriptiveRatio}%`;
-      
-      // Determine status
-      if (score >= maxScore * 0.8) {
-        status = 'excellent';
-      } else if (score >= maxScore * 0.6) {
-        status = 'good';
-      } else if (score >= maxScore * 0.3) {
-        status = 'partial';
-      }
-      
-    } catch (error) {
-      logger.error(`Link quality analysis error: ${(error as Error).message}`);
-      details = `Link analysis error: ${(error as Error).message}`;
-      breakdown = { error: (error as Error).message };
-    }
-    
-    return { score: Math.min(score, maxScore), maxScore, status, details, breakdown };
-  }
-
-  /**
-   * Check if link text is descriptive
-   * @param text - Link text
-   * @returns Whether the link is descriptive
-   */
-  isDescriptiveLink(text: string): boolean {
-    const genericTerms = [
-      'click here', 'read more', 'learn more', 'here', 'more', 'link',
-      'this', 'continue', 'next', 'previous', 'go', 'see more'
-    ];
-    
-    const lowercaseText = text.toLowerCase().trim();
-    return !genericTerms.includes(lowercaseText) && text.length > 3;
-  }
-
-  /**
-   * Check if link has contextual clues around it
-   * @param $ - Cheerio instance
-   * @param el - Link element
-   * @returns Whether link has contextual clues
-   */
-  hasContextualClues($: cheerio.CheerioAPI, el: any): boolean {
-    const parent = $(el).parent();
-    const siblings = parent.contents();
-    
-    // Check if there's descriptive text before or after the link
-    let hasContext = false;
-    siblings.each((i, sibling) => {
-      if (sibling.nodeType === 3) { // Text node
-        const text = $(sibling).text().trim();
-        if (text.length > 10) hasContext = true;
-      }
-    });
-    
-    return hasContext;
-  }
-
-  /**
-   * Check if domain is considered authoritative
-   * @param hostname - Domain hostname
-   * @returns Whether domain is authoritative
-   */
-  isAuthorityDomain(hostname: string): boolean {
-    const authorityDomains = [
-      'wikipedia.org', 'github.com', 'stackoverflow.com', 'mozilla.org',
-      'w3.org', 'google.com', 'microsoft.com', 'apple.com', 'adobe.com',
-      'npmjs.com', 'jquery.com', 'bootstrap.com'
-    ];
-    
-    return authorityDomains.some(domain => hostname.includes(domain));
-  }
-
-  /**
-   * Validate content accessibility with WCAG compliance
-   * @param $ - Cheerio instance
-   * @returns Accessibility validation result
-   */
-  validateContentAccessibility($: cheerio.CheerioAPI): AccessibilityValidation {
-    const issues: string[] = [];
-    const warnings: string[] = [];
-    let wcagCompliance = 100;
-    
-    try {
-      // Check for skip links
-      const skipLinks = $('a[href^="#"]').filter((i, el) => 
-        $(el).text().toLowerCase().includes('skip') || 
-        $(el).text().toLowerCase().includes('jump')
-      );
-      if (skipLinks.length === 0) {
-        issues.push('Missing skip navigation links for accessibility');
-        wcagCompliance -= 15;
-      }
-      
-      // Check heading hierarchy
-      const h1Count = $('h1').length;
-      if (h1Count === 0) {
-        issues.push('Missing H1 heading affects document structure');
-        wcagCompliance -= 20;
-      } else if (h1Count > 1) {
-        issues.push('Multiple H1 headings affect document outline');
-        wcagCompliance -= 10;
-      }
-      
-      // Check images without alt text
-      const imagesWithoutAlt = $('img:not([alt])');
-      if (imagesWithoutAlt.length > 0) {
-        issues.push(`${imagesWithoutAlt.length} images missing alt text`);
-        wcagCompliance -= Math.min(imagesWithoutAlt.length * 5, 20);
-      }
-      
-      // Check semantic structure ratio
-      const semanticRatio = this.calculateSemanticRatio($);
-      if (semanticRatio < 0.1) {
-        warnings.push('Low semantic HTML usage affects assistive technologies');
-        wcagCompliance -= 10;
-      }
-      
-    } catch (error) {
-      logger.error(`Accessibility validation error: ${(error as Error).message}`);
-      issues.push(`Accessibility validation failed: ${(error as Error).message}`);
-      wcagCompliance = 0;
-    }
-    
-    return {
-      wcagCompliance: Math.max(0, wcagCompliance),
-      issues,
-      warnings,
-      screenReaderFriendly: wcagCompliance > 70
-    };
-  }
-
-  /**
-   * Calculate semantic HTML ratio
-   * @param $ - Cheerio instance
-   * @returns Semantic elements ratio
-   */
-  calculateSemanticRatio($: cheerio.CheerioAPI): number {
-    const semanticElements = $('article, section, nav, aside, header, footer, main, figure, figcaption, time, address').length;
-    const totalElements = $('*').length;
-    
-    return totalElements > 0 ? semanticElements / totalElements : 0;
-  }
-
-  /**
-   * Validate LLM optimization
-   * @param analysis - Combined analysis results
-   * @returns LLM optimization validation
-   */
-  validateLLMOptimization(analysis: any): LLMOptimization {
-    const llmIssues: string[] = [];
-    const optimizations: string[] = [];
-    let llmOptimizationScore = 100;
-    
-    try {
-      // Text-to-markup ratio
-      if (analysis.contentOrg && analysis.contentOrg.breakdown.density.ratio < 0.3) {
-        llmIssues.push('Low text-to-markup ratio may confuse LLM parsing');
-        optimizations.push('Reduce unnecessary HTML complexity');
-        llmOptimizationScore -= 20;
-      }
-      
-      // Heading semantic value
-      if (analysis.headings && analysis.headings.breakdown.semantic.informationScent < 60) {
-        llmIssues.push('Headings lack semantic value for content understanding');
-        optimizations.push('Improve heading descriptiveness and information scent');
-        llmOptimizationScore -= 15;
-      }
-      
-      // Link contextual relevance
-      if (analysis.links && analysis.links.breakdown.context.descriptive < analysis.links.breakdown.context.total * 0.7) {
-        llmIssues.push('Links lack contextual information for relationship understanding');
-        optimizations.push('Add more descriptive anchor text and context');
-        llmOptimizationScore -= 15;
-      }
-      
-    } catch (error) {
-      logger.error(`LLM optimization validation error: ${(error as Error).message}`);
-      llmIssues.push(`LLM optimization validation failed: ${(error as Error).message}`);
-      llmOptimizationScore = 0;
-    }
-    
-    return {
-      llmOptimizationScore: Math.max(0, llmOptimizationScore),
-      llmSpecificIssues: llmIssues,
-      optimizationSuggestions: optimizations
-    };
-  }
-
-  /**
-   * Generate advanced context-aware recommendations
-   * @param analysis - Combined analysis results
-   * @param url - URL being analyzed
-   * @param contentType - Detected content type
-   * @returns Advanced recommendations
-   */
-  generateAdvancedRecommendations(analysis: any, url: string, contentType: ContentType): string[] {
-    const recommendations: Recommendation[] = [];
-    
-    try {
-      // Content type specific recommendations
-      if (contentType.primary === 'article') {
-        if (!analysis.semantic.breakdown.structure.structural.article) {
-          recommendations.push({
-            priority: 'high',
-            category: 'semantic',
-            issue: 'Missing article structure',
-            action: 'Wrap main content in <article> element with proper sections',
-            impact: 'Significantly improves LLM content boundary detection',
-            effort: 'low'
-          });
-        }
-      }
-      
-      // Accessibility-first recommendations
-      if (analysis.semantic.breakdown.accessibility.score < 70) {
-        recommendations.push({
-          priority: 'high',
-          category: 'accessibility',
-          issue: 'Poor screen reader compatibility',
-          action: 'Add ARIA labels and improve heading structure',
-          impact: 'Enhances both accessibility and LLM understanding',
-          effort: 'medium'
-        });
-      }
-      
-      // Semantic HTML recommendations
-      if (analysis.semantic.breakdown.structure.semanticRatio < 0.15) {
-        recommendations.push({
-          priority: 'medium',
-          category: 'semantic',
-          issue: 'Low semantic HTML usage',
-          action: 'Replace generic divs with semantic elements (article, section, nav, header, footer)',
-          impact: 'Significantly enhances LLM content understanding and parsing',
-          effort: 'medium'
-        });
-      }
-      
-      // Sort by priority and limit results
-      return recommendations.sort((a, b) => {
-        const priorityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
-        return (priorityOrder[a.priority] || 3) - (priorityOrder[b.priority] || 3);
-      }).slice(0, 6)
-        .map(rec => `${this.getPriorityIcon(rec.priority)} ${rec.action} (${rec.impact})`);
-      
-    } catch (error) {
-      logger.error(`Advanced recommendations generation failed: ${(error as Error).message}`);
-      return ['⚠️ Could not generate recommendations due to analysis error'];
-    }
-  }
-
-  /**
-   * Get priority icon for recommendations
-   * @param priority - Priority level
-   * @returns Icon representation
-   */
-  getPriorityIcon(priority: string): string {
-    const icons: Record<string, string> = {
-      critical: '🚨',
-      high: '❌',
-      medium: '⚠️',
-      low: '💡'
-    };
-    return icons[priority] || '💡';
-  }
-
-  /**
-   * Get failure result for error handling - Updated for new criteria
-   * @param category - Category that failed
-   * @param error - Error message
-   * @returns Failure result object
-   */
-  getFailureResult(category: string, error: string = 'Analysis failed'): AnalysisResult {
-    const maxScores: Record<string, number> = {
-      headingStructure: Object.values(this.criteria.headingStructure).reduce((a, b) => a + b, 0),
-      semanticElements: Object.values(this.criteria.semanticElements).reduce((a, b) => a + b, 0),
-      contentOrganization: Object.values(this.criteria.contentOrganization).reduce((a, b) => a + b, 0),
-      linkQuality: Object.values(this.criteria.linkQuality).reduce((a, b) => a + b, 0)
-    };
-    
-    return {
-      score: 0,
-      maxScore: maxScores[category] || 0,
-      status: 'fail',
-      details: error,
-      breakdown: { error }
-    };
-  }
-}
-
-// Export types for external use
-export type {
-  LLMFormattingResult,
-  CriteriaWeights,
-  ContentType,
-  AnalysisResult,
-  HeadingStructure,
-  HierarchyAnalysis,
-  HeadingContentAnalysis,
-  HeadingContentAdvanced,
-  HeadingSemanticValue,
-  SemanticStructureAnalysis,
-  AccessibilityFeatures,
-  ContentFlow,
-  StructureAnalysis,
-  ReadabilityAnalysis,
-  DensityAnalysis,
-  LinkAnalysis,
-  AccessibilityValidation,
-  LLMOptimization,
-  Recommendation,
-  ValidationResult
+const SECTION_CONFIG = {
+  id: 'llm-formatting',
+  name: 'LLM Formatting',
+  emoji: '🤖',
+  description: 'AI-friendly structure and formatting analysis',
+  weightPercentage: 25,
+  maxScore: 100
 };
 
-export default LLMFormattingAnalyzer; 
+/**
+ * Authoritative domain patterns for external link scoring
+ */
+const AUTHORITATIVE_DOMAINS = [
+  // Academic & Research
+  '.edu', '.gov', '.org',
+  // Major tech companies
+  'github.com', 'stackoverflow.com', 'developer.mozilla.org',
+  // News & Media
+  'reuters.com', 'bbc.com', 'cnn.com', 'nytimes.com',
+  // Professional
+  'linkedin.com', 'medium.com'
+];
+
+/**
+ * Non-descriptive link text patterns to avoid
+ */
+const NON_DESCRIPTIVE_PATTERNS = [
+  /^(click here|read more|learn more|more|here|this|that)$/i,
+  /^(download|link|url|website|page|article)$/i,
+  /^(continue|next|previous|back|home)$/i
+];
+
+// ===== UTILITIES =====
+
+/**
+ * Determines performance status based on score
+ */
+function getPerformanceStatus(score: number, maxScore: number): PerformanceStatus {
+  const percentage = (score / maxScore) * 100;
+  if (percentage >= 85) return 'excellent';
+  if (percentage >= 70) return 'good';
+  if (percentage >= 50) return 'warning';
+  return 'error';
+}
+
+/**
+ * Checks if link text is descriptive
+ */
+function isDescriptiveLinkText(text: string): boolean {
+  const cleanText = text.trim().toLowerCase();
+  if (cleanText.length < 3) return false;
+  
+  return !NON_DESCRIPTIVE_PATTERNS.some(pattern => pattern.test(cleanText));
+}
+
+/**
+ * Checks if domain is authoritative
+ */
+function isAuthoritativeDomain(url: string): boolean {
+  try {
+    const domain = new URL(url).hostname.toLowerCase();
+    return AUTHORITATIVE_DOMAINS.some(auth => domain.includes(auth));
+  } catch {
+    return false;
+  }
+}
+
+// ===== METRIC ANALYZERS =====
+
+/**
+ * Analyzes heading hierarchy (15 points)
+ */
+function analyzeHeadingHierarchy(html: string): MetricCard {
+  const $ = cheerio.load(html);
+  
+  let score = 0;
+  let problems: string[] = [];
+  let solutions: string[] = [];
+  
+  const headingAnalysis = analyzeHeadings($);
+  
+  // Hierarchy validation (8 points)
+  if (headingAnalysis.hierarchy.valid) {
+    score += 8;
+  } else {
+    problems.push(...headingAnalysis.hierarchy.issues);
+    score += Math.max(0, 8 - headingAnalysis.hierarchy.issues.length * 2);
+  }
+  
+  // H1 uniqueness (4 points)
+  if (headingAnalysis.h1Count === 1) {
+    score += 4;
+  } else if (headingAnalysis.h1Count === 0) {
+    problems.push("Missing H1 heading for main page topic");
+    solutions.push("Add a single H1 heading that describes the main content");
+  } else {
+    problems.push(`Multiple H1 headings found (${headingAnalysis.h1Count}). Should be unique.`);
+    solutions.push("Use only one H1 per page, use H2-H6 for subheadings");
+  }
+  
+  // Heading presence (3 points)
+  if (headingAnalysis.totalHeadings >= 3) {
+    score += 3;
+  } else if (headingAnalysis.totalHeadings >= 1) {
+    score += 1;
+    problems.push("Limited heading structure for content organization");
+  } else {
+    problems.push("No headings found for content structure");
+  }
+  
+  if (problems.length > 0) {
+    solutions.push(
+      "Use proper heading hierarchy (H1 → H2 → H3, etc.)",
+      "Make headings descriptive and informative",
+      "Ensure logical content flow through headings"
+    );
+  }
+
+  return {
+    id: 'heading-hierarchy',
+    name: 'Heading Hierarchy',
+    score,
+    maxScore: 15,
+    status: getPerformanceStatus(score, 15),
+    explanation: "Proper heading hierarchy helps AI understand content structure and importance. Logical H1-H6 organization improves both accessibility and AI comprehension.",
+    problems,
+    solutions,
+    successMessage: "Excellent! Your heading hierarchy follows logical structure for AI understanding.",
+    rawData: {
+      h1Count: headingAnalysis.h1Count,
+      totalHeadings: headingAnalysis.totalHeadings,
+      hierarchyValid: headingAnalysis.hierarchy.valid,
+      maxLevel: headingAnalysis.maxLevel
+    }
+  };
+}
+
+/**
+ * Analyzes heading quality (10 points)
+ */
+function analyzeHeadingQuality(html: string): MetricCard {
+  const $ = cheerio.load(html);
+  
+  let score = 0;
+  let problems: string[] = [];
+  let solutions: string[] = [];
+  
+  const headingAnalysis = analyzeHeadings($);
+  
+  if (headingAnalysis.headings.length === 0) {
+    problems.push("No headings found to analyze quality");
+    solutions.push("Add descriptive headings that summarize section content");
+  } else {
+    // Quality scoring based on descriptiveness
+    score = Math.min(10, headingAnalysis.quality.score);
+    
+    if (headingAnalysis.quality.issues.length > 0) {
+      problems.push(...headingAnalysis.quality.issues);
+      solutions.push(
+        "Write descriptive headings that summarize content",
+        "Avoid generic headings like 'Introduction' or 'Content'",
+        "Include relevant keywords naturally in headings"
+      );
+    }
+  }
+
+  return {
+    id: 'heading-quality',
+    name: 'Heading Quality',
+    score,
+    maxScore: 10,
+    status: getPerformanceStatus(score, 10),
+    explanation: "High-quality headings provide clear context and improve AI content understanding. Descriptive headings help both users and AI grasp content topics quickly.",
+    problems,
+    solutions,
+    successMessage: "Great! Your headings are descriptive and provide clear content context.",
+    rawData: {
+      qualityScore: headingAnalysis.quality.score,
+      descriptiveHeadings: headingAnalysis.headings.filter(h => h.descriptive).length,
+      totalHeadings: headingAnalysis.headings.length
+    }
+  };
+}
+
+/**
+ * Analyzes heading semantic value (10 points)
+ */
+function analyzeHeadingSemanticValue(html: string): MetricCard {
+  const $ = cheerio.load(html);
+  
+  let score = 0;
+  let problems: string[] = [];
+  let solutions: string[] = [];
+  
+  const headingAnalysis = analyzeHeadings($);
+  
+  if (headingAnalysis.headings.length === 0) {
+    problems.push("No headings found to provide semantic value");
+    solutions.push("Add headings that create information scent for AI");
+  } else {
+    // Semantic value scoring
+    score = Math.min(10, headingAnalysis.semanticValue.score);
+    
+    if (headingAnalysis.semanticValue.issues.length > 0) {
+      problems.push(...headingAnalysis.semanticValue.issues);
+      solutions.push(
+        "Create headings that tell a story about your content",
+        "Use headings to guide AI through your information architecture",
+        "Include key concepts and topics in heading text"
+      );
+    }
+  }
+
+  return {
+    id: 'heading-semantic-value',
+    name: 'Heading Semantic Value',
+    score,
+    maxScore: 10,
+    status: getPerformanceStatus(score, 10),
+    explanation: "Semantically rich headings create information scent that helps AI understand content relationships and topic hierarchy.",
+    problems,
+    solutions,
+    successMessage: "Perfect! Your headings provide excellent semantic information for AI understanding.",
+    rawData: {
+      semanticScore: headingAnalysis.semanticValue.score,
+      informativeHeadings: headingAnalysis.headings.filter(h => h.text.length > 20).length
+    }
+  };
+}
+
+/**
+ * Analyzes structural elements using shared analyzer (12 points)
+ */
+function analyzeStructuralElements(semanticResult: SharedSemanticHTML5Result): MetricCard {
+  const score = semanticResult.structuralScore;
+  const issues = semanticResult.details.structuralAnalysis.issues;
+  
+  let problems: string[] = [];
+  let solutions: string[] = [];
+  
+  if (issues.length > 0) {
+    problems.push(...issues);
+    solutions.push(
+      "Add semantic HTML5 structural elements (main, header, nav, footer)",
+      "Use main element for primary content area",
+      "Include header for site branding and navigation",
+      "Add footer for supplementary information"
+    );
+  }
+
+  return {
+    id: 'structural-elements',
+    name: 'Structural Elements',
+    score,
+    maxScore: 12,
+    status: getPerformanceStatus(score, 12),
+    explanation: "Semantic structural elements help AI understand page layout and content organization. Clear structure improves content comprehension.",
+    problems,
+    solutions,
+    successMessage: "Excellent! Your page uses proper structural elements for AI understanding.",
+    rawData: {
+      elements: semanticResult.elements.structural,
+      structuralAnalysis: semanticResult.details.structuralAnalysis
+    }
+  };
+}
+
+/**
+ * Analyzes accessibility features using shared analyzer (8 points)
+ */
+function analyzeAccessibilityFeatures(semanticResult: SharedSemanticHTML5Result): MetricCard {
+  const score = semanticResult.accessibilityScore;
+  const issues = semanticResult.details.accessibilityAnalysis.issues;
+  
+  let problems: string[] = [];
+  let solutions: string[] = [];
+  
+  if (issues.length > 0) {
+    problems.push(...issues);
+    solutions.push(
+      "Add ARIA labels for better element description",
+      "Use landmark roles for navigation assistance",
+      "Include alt text for all images",
+      "Add aria-describedby relationships where appropriate"
+    );
+  }
+
+  return {
+    id: 'accessibility-features',
+    name: 'Accessibility Features',
+    score,
+    maxScore: 8,
+    status: getPerformanceStatus(score, 8),
+    explanation: "Accessibility features improve AI understanding by providing explicit element descriptions and relationships through ARIA attributes.",
+    problems,
+    solutions,
+    successMessage: "Great! Your accessibility features enhance AI content comprehension.",
+    rawData: {
+      accessibilityCount: semanticResult.elements.accessibility,
+      accessibilityAnalysis: semanticResult.details.accessibilityAnalysis
+    }
+  };
+}
+
+/**
+ * Analyzes content flow using shared analyzer (10 points)
+ */
+function analyzeContentFlow(semanticResult: SharedSemanticHTML5Result): MetricCard {
+  const score = semanticResult.contentFlowScore;
+  const issues = semanticResult.details.contentFlowAnalysis.issues;
+  
+  let problems: string[] = [];
+  let solutions: string[] = [];
+  
+  if (issues.length > 0) {
+    problems.push(...issues);
+    solutions.push(
+      "Use article elements for main content pieces",
+      "Organize content with section elements",
+      "Add aside elements for supplementary information",
+      "Create logical content hierarchy with nested elements"
+    );
+  }
+
+  return {
+    id: 'content-flow',
+    name: 'Content Flow',
+    score,
+    maxScore: 10,
+    status: getPerformanceStatus(score, 10),
+    explanation: "Logical content flow through semantic elements helps AI understand information organization and content relationships.",
+    problems,
+    solutions,
+    successMessage: "Perfect! Your content flow organization is excellent for AI understanding.",
+    rawData: {
+      contentElements: semanticResult.elements.content,
+      contentFlowAnalysis: semanticResult.details.contentFlowAnalysis
+    }
+  };
+}
+
+/**
+ * Analyzes internal links (8 points)
+ */
+function analyzeInternalLinks(html: string, currentUrl: string): MetricCard {
+  const $ = cheerio.load(html);
+  
+  let score = 0;
+  let problems: string[] = [];
+  let solutions: string[] = [];
+  
+  const linkAnalysis = analyzeLinkQuality($, currentUrl);
+  
+  if (linkAnalysis.internal.count === 0) {
+    problems.push("No internal links found for site navigation");
+    solutions.push("Add internal links to related content and important pages");
+  } else {
+    // Score based on descriptive ratio and count
+    const descriptiveRatio = linkAnalysis.internal.descriptive / linkAnalysis.internal.count;
+    score = linkAnalysis.internal.score;
+    
+    if (descriptiveRatio < 0.7) {
+      problems.push(`${linkAnalysis.internal.count - linkAnalysis.internal.descriptive} internal links have non-descriptive text`);
+    }
+    
+    if (linkAnalysis.internal.issues.length > 0) {
+      problems.push(...linkAnalysis.internal.issues);
+    }
+  }
+  
+  if (problems.length > 0) {
+    solutions.push(
+      "Use descriptive anchor text that explains destination",
+      "Avoid generic text like 'click here' or 'read more'",
+      "Include relevant keywords in link text naturally"
+    );
+  }
+
+  return {
+    id: 'internal-links',
+    name: 'Internal Links',
+    score,
+    maxScore: 8,
+    status: getPerformanceStatus(score, 8),
+    explanation: "Descriptive internal links help AI understand site structure and content relationships. Good internal linking improves content discoverability.",
+    problems,
+    solutions,
+    successMessage: "Great! Your internal links use descriptive text for better AI understanding.",
+    rawData: {
+      internalCount: linkAnalysis.internal.count,
+      descriptiveCount: linkAnalysis.internal.descriptive,
+      descriptiveRatio: linkAnalysis.descriptiveRatio
+    }
+  };
+}
+
+/**
+ * Analyzes external links (7 points)
+ */
+function analyzeExternalLinks(html: string, currentUrl: string): MetricCard {
+  const $ = cheerio.load(html);
+  
+  let score = 0;
+  let problems: string[] = [];
+  let solutions: string[] = [];
+  
+  const linkAnalysis = analyzeLinkQuality($, currentUrl);
+  
+  if (linkAnalysis.external.count === 0) {
+    problems.push("No external links found for authority and context");
+    solutions.push("Link to authoritative sources to support your content");
+  } else {
+    score = linkAnalysis.external.score;
+    
+    if (linkAnalysis.external.issues.length > 0) {
+      problems.push(...linkAnalysis.external.issues);
+    }
+    
+    const authoritativeRatio = linkAnalysis.external.authoritative / linkAnalysis.external.count;
+    if (authoritativeRatio < 0.5) {
+      problems.push("Consider linking to more authoritative sources (.edu, .gov, established domains)");
+    }
+  }
+  
+  if (problems.length > 0) {
+    solutions.push(
+      "Link to authoritative and relevant external sources",
+      "Use descriptive anchor text for external links",
+      "Ensure external links support and enhance your content"
+    );
+  }
+
+  return {
+    id: 'external-links',
+    name: 'External Links',
+    score,
+    maxScore: 7,
+    status: getPerformanceStatus(score, 7),
+    explanation: "Quality external links to authoritative sources enhance content credibility and provide additional context for AI understanding.",
+    problems,
+    solutions,
+    successMessage: "Excellent! Your external links connect to authoritative sources effectively.",
+    rawData: {
+      externalCount: linkAnalysis.external.count,
+      authoritativeCount: linkAnalysis.external.authoritative,
+      authoritativeRatio: linkAnalysis.external.authoritative / Math.max(1, linkAnalysis.external.count)
+    }
+  };
+}
+
+/**
+ * Analyzes link context quality (5 points)
+ */
+function analyzeLinkContextQuality(html: string, currentUrl: string): MetricCard {
+  const $ = cheerio.load(html);
+  
+  let score = 0;
+  let problems: string[] = [];
+  let solutions: string[] = [];
+  
+  const linkAnalysis = analyzeLinkQuality($, currentUrl);
+  
+  if (linkAnalysis.totalLinks === 0) {
+    problems.push("No links found to analyze context quality");
+    solutions.push("Add links with proper context and integration");
+  } else {
+    score = linkAnalysis.context.score;
+    
+    if (linkAnalysis.context.issues.length > 0) {
+      problems.push(...linkAnalysis.context.issues);
+      solutions.push(
+        "Integrate links naturally within content flow",
+        "Provide context before and after links",
+        "Ensure links enhance rather than interrupt reading"
+      );
+    }
+  }
+
+  return {
+    id: 'link-context',
+    name: 'Link Context Quality',
+    score,
+    maxScore: 5,
+    status: getPerformanceStatus(score, 5),
+    explanation: "Well-integrated links with proper context help AI understand content relationships and improve user experience.",
+    problems,
+    solutions,
+    successMessage: "Perfect! Your links are well-integrated with excellent contextual quality.",
+    rawData: {
+      contextScore: linkAnalysis.context.score,
+      totalLinks: linkAnalysis.totalLinks
+    }
+  };
+}
+
+/**
+ * Analyzes clean markup (8 points)
+ */
+function analyzeCleanMarkup(html: string): MetricCard {
+  const $ = cheerio.load(html);
+  
+  let score = 8; // Start with full score
+  let problems: string[] = [];
+  let solutions: string[] = [];
+  
+  const technicalAnalysis = analyzeTechnicalStructure($);
+  
+  score = technicalAnalysis.cleanMarkup.score;
+  
+  if (technicalAnalysis.cleanMarkup.issues.length > 0) {
+    problems.push(...technicalAnalysis.cleanMarkup.issues);
+    solutions.push(
+      "Minimize inline styles and use external CSS",
+      "Remove unnecessary nested elements",
+      "Validate HTML markup for errors",
+      "Clean up redundant or deprecated attributes"
+    );
+  }
+
+  return {
+    id: 'clean-markup',
+    name: 'Clean Markup',
+    score,
+    maxScore: 8,
+    status: getPerformanceStatus(score, 8),
+    explanation: "Clean, semantic markup improves AI parsing efficiency and reduces processing complexity for better content understanding.",
+    problems,
+    solutions,
+    successMessage: "Excellent! Your markup is clean and optimized for AI processing.",
+    rawData: {
+      cleanMarkupScore: technicalAnalysis.cleanMarkup.score,
+      validHTML: technicalAnalysis.validHTML
+    }
+  };
+}
+
+/**
+ * Analyzes navigation structure (7 points)
+ */
+function analyzeNavigationStructure(html: string): MetricCard {
+  const $ = cheerio.load(html);
+  
+  let score = 0;
+  let problems: string[] = [];
+  let solutions: string[] = [];
+  
+  const technicalAnalysis = analyzeTechnicalStructure($);
+  
+  score = technicalAnalysis.navigation.score;
+  
+  if (technicalAnalysis.navigation.issues.length > 0) {
+    problems.push(...technicalAnalysis.navigation.issues);
+    solutions.push(
+      "Add clear navigation menus with semantic markup",
+      "Include breadcrumb navigation for deep pages",
+      "Use descriptive navigation labels",
+      "Ensure navigation is accessible and logical"
+    );
+  }
+
+  return {
+    id: 'navigation-structure',
+    name: 'Navigation Structure',
+    score,
+    maxScore: 7,
+    status: getPerformanceStatus(score, 7),
+    explanation: "Clear navigation structure helps AI understand site architecture and content relationships. Good navigation improves content discoverability.",
+    problems,
+    solutions,
+    successMessage: "Great! Your navigation structure is clear and well-organized for AI understanding.",
+    rawData: {
+      navigationScore: technicalAnalysis.navigation.score,
+      breadcrumbsPresent: technicalAnalysis.breadcrumbs.present
+    }
+  };
+}
+
+// ===== HELPER FUNCTIONS =====
+
+/**
+ * Comprehensive heading analysis
+ */
+function analyzeHeadings($: cheerio.CheerioAPI): HeadingAnalysis {
+  const headings: Array<{ level: number; text: string; descriptive: boolean }> = [];
+  let h1Count = 0;
+  let maxLevel = 0;
+  
+  // Collect all headings
+  $('h1, h2, h3, h4, h5, h6').each((_, element) => {
+    const tag = element.tagName.toLowerCase();
+    const level = parseInt(tag.charAt(1));
+    const text = $(element).text().trim();
+    const descriptive = text.length > 10 && !text.toLowerCase().includes('lorem ipsum');
+    
+    headings.push({ level, text, descriptive });
+    
+    if (level === 1) h1Count++;
+    if (level > maxLevel) maxLevel = level;
+  });
+  
+  // Analyze hierarchy
+  const hierarchyAnalysis = analyzeHeadingHierarchyStructure(headings);
+  
+  // Analyze quality
+  const qualityAnalysis = analyzeHeadingQualityMetrics(headings);
+  
+  // Analyze semantic value
+  const semanticAnalysis = analyzeHeadingSemanticMetrics(headings);
+  
+  return {
+    hierarchy: hierarchyAnalysis,
+    quality: qualityAnalysis,
+    semanticValue: semanticAnalysis,
+    h1Count,
+    totalHeadings: headings.length,
+    maxLevel,
+    headings
+  };
+}
+
+/**
+ * Analyzes heading hierarchy validity
+ */
+function analyzeHeadingHierarchyStructure(headings: Array<{ level: number; text: string }>): { valid: boolean; issues: string[] } {
+  const issues: string[] = [];
+  let valid = true;
+  
+  if (headings.length === 0) {
+    return { valid: false, issues: ['No headings found'] };
+  }
+  
+  // Check for logical progression
+  let previousLevel = 0;
+  headings.forEach((heading, index) => {
+    if (index === 0 && heading.level !== 1) {
+      issues.push('Page should start with H1 heading');
+      valid = false;
+    }
+    
+    if (heading.level > previousLevel + 1) {
+      issues.push(`Heading level jumps from H${previousLevel} to H${heading.level}`);
+      valid = false;
+    }
+    
+    previousLevel = heading.level;
+  });
+  
+  return { valid, issues };
+}
+
+/**
+ * Analyzes heading quality metrics
+ */
+function analyzeHeadingQualityMetrics(headings: Array<{ level: number; text: string; descriptive: boolean }>): { score: number; issues: string[] } {
+  const issues: string[] = [];
+  
+  if (headings.length === 0) {
+    return { score: 0, issues: ['No headings to analyze'] };
+  }
+  
+  const descriptiveCount = headings.filter(h => h.descriptive).length;
+  const descriptiveRatio = descriptiveCount / headings.length;
+  
+  let score = descriptiveRatio * 10;
+  
+  if (descriptiveRatio < 0.7) {
+    issues.push(`${headings.length - descriptiveCount} headings are too short or generic`);
+  }
+  
+  // Check for generic headings
+  const genericPatterns = /^(introduction|content|about|info|data|text|section)/i;
+  const genericCount = headings.filter(h => genericPatterns.test(h.text)).length;
+  
+  if (genericCount > 0) {
+    issues.push(`${genericCount} headings use generic text`);
+    score -= genericCount * 1;
+  }
+  
+  return { score: Math.max(0, Math.round(score)), issues };
+}
+
+/**
+ * Analyzes heading semantic value metrics
+ */
+function analyzeHeadingSemanticMetrics(headings: Array<{ level: number; text: string }>): { score: number; issues: string[] } {
+  const issues: string[] = [];
+  
+  if (headings.length === 0) {
+    return { score: 0, issues: ['No headings to analyze semantic value'] };
+  }
+  
+  // Score based on informativeness
+  const informativeCount = headings.filter(h => h.text.length > 20).length;
+  const keywordRichCount = headings.filter(h => h.text.split(' ').length >= 3).length;
+  
+  let score = 0;
+  
+  // Length bonus (informative headings)
+  score += (informativeCount / headings.length) * 5;
+  
+  // Keyword richness bonus
+  score += (keywordRichCount / headings.length) * 5;
+  
+  if (informativeCount < headings.length * 0.5) {
+    issues.push('Many headings lack informative content');
+  }
+  
+  if (keywordRichCount < headings.length * 0.3) {
+    issues.push('Headings could include more relevant keywords');
+  }
+  
+  return { score: Math.round(score), issues };
+}
+
+/**
+ * Analyzes link quality comprehensively
+ */
+function analyzeLinkQuality($: cheerio.CheerioAPI, currentUrl: string): LinkQualityAnalysis {
+  const allLinks = $('a[href]');
+  const analysis: LinkQualityAnalysis = {
+    internal: { count: 0, descriptive: 0, score: 0, issues: [] },
+    external: { count: 0, descriptive: 0, authoritative: 0, score: 0, issues: [] },
+    context: { score: 0, issues: [] },
+    totalLinks: allLinks.length,
+    descriptiveRatio: 0
+  };
+  
+  let totalDescriptive = 0;
+  
+  allLinks.each((_, element) => {
+    const $link = $(element);
+    const href = $link.attr('href') || '';
+    const text = $link.text().trim();
+    const isDescriptive = isDescriptiveLinkText(text);
+    
+    if (isDescriptive) totalDescriptive++;
+    
+    try {
+      const linkUrl = new URL(href, currentUrl);
+      const currentDomain = new URL(currentUrl).hostname;
+      
+      if (linkUrl.hostname === currentDomain) {
+        // Internal link
+        analysis.internal.count++;
+        if (isDescriptive) analysis.internal.descriptive++;
+      } else {
+        // External link
+        analysis.external.count++;
+        if (isDescriptive) analysis.external.descriptive++;
+        if (isAuthoritativeDomain(href)) analysis.external.authoritative++;
+      }
+    } catch {
+      // Relative or malformed links - treat as internal
+      analysis.internal.count++;
+      if (isDescriptive) analysis.internal.descriptive++;
+    }
+  });
+  
+  // Calculate scores
+  if (analysis.internal.count > 0) {
+    const internalRatio = analysis.internal.descriptive / analysis.internal.count;
+    analysis.internal.score = Math.round(internalRatio * 8);
+    
+    if (internalRatio < 0.7) {
+      analysis.internal.issues.push('Many internal links have non-descriptive text');
+    }
+  }
+  
+  if (analysis.external.count > 0) {
+    const externalDescriptiveRatio = analysis.external.descriptive / analysis.external.count;
+    const authoritativeRatio = analysis.external.authoritative / analysis.external.count;
+    analysis.external.score = Math.round((externalDescriptiveRatio * 0.4 + authoritativeRatio * 0.6) * 7);
+    
+    if (externalDescriptiveRatio < 0.7) {
+      analysis.external.issues.push('External links need more descriptive anchor text');
+    }
+    
+    if (authoritativeRatio < 0.3) {
+      analysis.external.issues.push('Consider linking to more authoritative sources');
+    }
+  }
+  
+  // Context analysis
+  const contextScore = analyzeLinksContext($);
+  analysis.context.score = contextScore.score;
+  analysis.context.issues = contextScore.issues;
+  
+  analysis.descriptiveRatio = analysis.totalLinks > 0 ? totalDescriptive / analysis.totalLinks : 0;
+  
+  return analysis;
+}
+
+/**
+ * Analyzes links contextual integration
+ */
+function analyzeLinksContext($: cheerio.CheerioAPI): { score: number; issues: string[] } {
+  const issues: string[] = [];
+  const links = $('a[href]');
+  
+  if (links.length === 0) {
+    return { score: 0, issues: ['No links to analyze context'] };
+  }
+  
+  let contextualScore = 0;
+  let linksInParagraphs = 0;
+  let linksWithSurroundingText = 0;
+  
+  links.each((_, element) => {
+    const $link = $(element);
+    const $parent = $link.parent();
+    
+    // Check if link is within paragraph
+    if ($parent.is('p') || $parent.closest('p').length > 0) {
+      linksInParagraphs++;
+    }
+    
+    // Check for surrounding text context
+    const surroundingText = $parent.text().replace($link.text(), '').trim();
+    if (surroundingText.length > 20) {
+      linksWithSurroundingText++;
+    }
+  });
+  
+  // Score calculation
+  const paragraphRatio = linksInParagraphs / links.length;
+  const contextRatio = linksWithSurroundingText / links.length;
+  
+  contextualScore = (paragraphRatio * 0.4 + contextRatio * 0.6) * 5;
+  
+  if (paragraphRatio < 0.6) {
+    issues.push('Many links are not properly integrated within text content');
+  }
+  
+  if (contextRatio < 0.5) {
+    issues.push('Links need more surrounding context for better integration');
+  }
+  
+  return { score: Math.round(contextualScore), issues };
+}
+
+/**
+ * Analyzes technical structure aspects
+ */
+function analyzeTechnicalStructure($: cheerio.CheerioAPI): TechnicalStructureAnalysis {
+  const analysis: TechnicalStructureAnalysis = {
+    cleanMarkup: { score: 8, issues: [] },
+    navigation: { score: 0, issues: [] },
+    breadcrumbs: { present: false, score: 0 },
+    validHTML: true
+  };
+  
+  // Clean markup analysis
+  const inlineStyles = $('[style]').length;
+  const deprecatedTags = $('font, center, b, i').length;
+  const deepNesting = $('*').filter((_, el) => $(el).parents().length > 10).length;
+  
+  if (inlineStyles > 5) {
+    analysis.cleanMarkup.issues.push(`${inlineStyles} elements with inline styles found`);
+    analysis.cleanMarkup.score -= Math.min(3, Math.floor(inlineStyles / 5));
+  }
+  
+  if (deprecatedTags > 0) {
+    analysis.cleanMarkup.issues.push(`${deprecatedTags} deprecated HTML tags found`);
+    analysis.cleanMarkup.score -= Math.min(2, deprecatedTags);
+  }
+  
+  if (deepNesting > 0) {
+    analysis.cleanMarkup.issues.push('Some elements are deeply nested (>10 levels)');
+    analysis.cleanMarkup.score -= 1;
+  }
+  
+  analysis.cleanMarkup.score = Math.max(0, analysis.cleanMarkup.score);
+  
+  // Navigation analysis
+  const navElements = $('nav').length;
+  const navLinks = $('nav a, .nav a, .navigation a').length;
+  const breadcrumbs = $('.breadcrumb, .breadcrumbs, nav[aria-label*="breadcrumb"]').length;
+  
+  if (navElements > 0) {
+    analysis.navigation.score += 3;
+  } else {
+    analysis.navigation.issues.push('No semantic nav elements found');
+  }
+  
+  if (navLinks >= 3) {
+    analysis.navigation.score += 2;
+  } else {
+    analysis.navigation.issues.push('Limited navigation links found');
+  }
+  
+  if (breadcrumbs > 0) {
+    analysis.breadcrumbs.present = true;
+    analysis.breadcrumbs.score = 2;
+    analysis.navigation.score += 2;
+  } else {
+    analysis.navigation.issues.push('No breadcrumb navigation found');
+  }
+  
+  analysis.navigation.score = Math.min(7, analysis.navigation.score);
+  
+  return analysis;
+}
+
+// ===== MAIN ANALYZER =====
+
+/**
+ * Complete LLM formatting analysis according to new architecture
+ */
+export function analyzeLLMFormatting(html: string, url: string): LLMFormattingAnalysisResult {
+  try {
+    // Input validation
+    if (!html || typeof html !== 'string') {
+      throw new Error('HTML content required for LLM formatting analysis');
+    }
+
+    // Shared semantic analysis
+    const semanticAnalyzer = new SharedSemanticHTML5Analyzer();
+    const $ = cheerio.load(html);
+    const semanticResult = semanticAnalyzer.analyze($);
+
+    // Individual metric analyses
+    const headingHierarchyCard = analyzeHeadingHierarchy(html);
+    const headingQualityCard = analyzeHeadingQuality(html);
+    const headingSemanticCard = analyzeHeadingSemanticValue(html);
+    
+    const structuralElementsCard = analyzeStructuralElements(semanticResult);
+    const accessibilityFeaturesCard = analyzeAccessibilityFeatures(semanticResult);
+    const contentFlowCard = analyzeContentFlow(semanticResult);
+    
+    const internalLinksCard = analyzeInternalLinks(html, url);
+    const externalLinksCard = analyzeExternalLinks(html, url);
+    const linkContextCard = analyzeLinkContextQuality(html, url);
+    
+    const cleanMarkupCard = analyzeCleanMarkup(html);
+    const navigationCard = analyzeNavigationStructure(html);
+
+    // Build drawers (DrawerSubSection)
+    const headingStructureDrawer: DrawerSubSection = {
+      id: 'heading-structure',
+      name: 'Heading Structure',
+      description: 'Logical heading hierarchy and quality',
+      totalScore: headingHierarchyCard.score + headingQualityCard.score + headingSemanticCard.score,
+      maxScore: 35,
+      status: getPerformanceStatus(
+        headingHierarchyCard.score + headingQualityCard.score + headingSemanticCard.score, 
+        35
+      ),
+      cards: [headingHierarchyCard, headingQualityCard, headingSemanticCard]
+    };
+
+    const semanticHTML5Drawer: DrawerSubSection = {
+      id: 'semantic-html5',
+      name: 'Semantic HTML5',
+      description: 'Structural elements and accessibility features',
+      totalScore: structuralElementsCard.score + accessibilityFeaturesCard.score + contentFlowCard.score,
+      maxScore: 30,
+      status: getPerformanceStatus(
+        structuralElementsCard.score + accessibilityFeaturesCard.score + contentFlowCard.score, 
+        30
+      ),
+      cards: [structuralElementsCard, accessibilityFeaturesCard, contentFlowCard]
+    };
+
+    const linkQualityDrawer: DrawerSubSection = {
+      id: 'link-quality',
+      name: 'Link Quality',
+      description: 'Internal and external link optimization',
+      totalScore: internalLinksCard.score + externalLinksCard.score + linkContextCard.score,
+      maxScore: 20,
+      status: getPerformanceStatus(
+        internalLinksCard.score + externalLinksCard.score + linkContextCard.score, 
+        20
+      ),
+      cards: [internalLinksCard, externalLinksCard, linkContextCard]
+    };
+
+    const technicalStructureDrawer: DrawerSubSection = {
+      id: 'technical-structure',
+      name: 'Technical Structure',
+      description: 'Clean markup and navigation organization',
+      totalScore: cleanMarkupCard.score + navigationCard.score,
+      maxScore: 15,
+      status: getPerformanceStatus(cleanMarkupCard.score + navigationCard.score, 15),
+      cards: [cleanMarkupCard, navigationCard]
+    };
+
+    // Total section score
+    const totalScore = headingStructureDrawer.totalScore + semanticHTML5Drawer.totalScore + 
+                      linkQualityDrawer.totalScore + technicalStructureDrawer.totalScore;
+
+    // Build main section
+    const section: MainSection = {
+      id: SECTION_CONFIG.id,
+      name: SECTION_CONFIG.name,
+      emoji: SECTION_CONFIG.emoji,
+      description: SECTION_CONFIG.description,
+      weightPercentage: SECTION_CONFIG.weightPercentage,
+      totalScore,
+      maxScore: SECTION_CONFIG.maxScore,
+      status: getPerformanceStatus(totalScore, SECTION_CONFIG.maxScore),
+      drawers: [headingStructureDrawer, semanticHTML5Drawer, linkQualityDrawer, technicalStructureDrawer]
+    };
+
+    // Raw data for debug/export
+    const headingAnalysis = analyzeHeadings($);
+    const linkAnalysis = analyzeLinkQuality($, url);
+    const technicalAnalysis = analyzeTechnicalStructure($);
+
+    const rawData = {
+      headingStructure: {
+        hierarchy: headingAnalysis.hierarchy.valid,
+        h1Count: headingAnalysis.h1Count,
+        totalHeadings: headingAnalysis.totalHeadings,
+        maxLevel: headingAnalysis.maxLevel,
+        quality: headingAnalysis.quality.score
+      },
+      semanticHTML5: semanticResult,
+      linkQuality: {
+        internalCount: linkAnalysis.internal.count,
+        externalCount: linkAnalysis.external.count,
+        descriptiveCount: linkAnalysis.internal.descriptive + linkAnalysis.external.descriptive,
+        totalLinks: linkAnalysis.totalLinks,
+        contextualityScore: linkAnalysis.context.score
+      },
+      technicalStructure: {
+        validHTML: technicalAnalysis.validHTML,
+        cleanMarkup: technicalAnalysis.cleanMarkup.score,
+        navigationScore: technicalAnalysis.navigation.score,
+        breadcrumbsPresent: technicalAnalysis.breadcrumbs.present
+      },
+      totalScore
+    };
+
+    return {
+      section,
+      rawData
+    };
+
+  } catch (error) {
+    // Error handling with minimal section
+    const errorSection: MainSection = {
+      id: SECTION_CONFIG.id,
+      name: SECTION_CONFIG.name,
+      emoji: SECTION_CONFIG.emoji,
+      description: 'Analysis error occurred',
+      weightPercentage: SECTION_CONFIG.weightPercentage,
+      totalScore: 0,
+      maxScore: SECTION_CONFIG.maxScore,
+      status: 'error',
+      drawers: []
+    };
+
+    return {
+      section: errorSection,
+      rawData: {
+        headingStructure: { hierarchy: false, h1Count: 0, totalHeadings: 0, maxLevel: 0, quality: 0 },
+        semanticHTML5: {
+          structuralScore: 0,
+          accessibilityScore: 0,
+          contentFlowScore: 0,
+          semanticRatio: 0,
+          elements: { structural: [], content: [], accessibility: 0, totalElements: 0, semanticElements: 0 },
+          details: {
+            structuralAnalysis: { main: { count: 0, present: false }, header: { count: 0, present: false }, nav: { count: 0, present: false }, footer: { count: 0, present: false }, score: 0, issues: [] },
+            accessibilityAnalysis: { ariaLabels: 0, ariaDescribedBy: 0, ariaLabelledBy: 0, landmarks: 0, roles: 0, altTexts: 0, score: 0, issues: [] },
+            contentFlowAnalysis: { article: { count: 0, nested: false }, section: { count: 0, nested: false }, aside: { count: 0, present: false }, score: 0, issues: [] }
+          }
+        },
+        linkQuality: { internalCount: 0, externalCount: 0, descriptiveCount: 0, totalLinks: 0, contextualityScore: 0 },
+        technicalStructure: { validHTML: false, cleanMarkup: 0, navigationScore: 0, breadcrumbsPresent: false },
+        totalScore: 0,
+        error: (error as Error).message
+      }
+    };
+  }
+}
+
+// ===== EXPORTS =====
+
+export {
+  AUTHORITATIVE_DOMAINS,
+  NON_DESCRIPTIVE_PATTERNS,
+  analyzeHeadingHierarchy,
+  analyzeHeadingQuality,
+  analyzeHeadingSemanticValue,
+  analyzeStructuralElements,
+  analyzeAccessibilityFeatures,
+  analyzeContentFlow,
+  analyzeInternalLinks,
+  analyzeExternalLinks,
+  analyzeLinkContextQuality,
+  analyzeCleanMarkup,
+  analyzeNavigationStructure
+};
+
+export type {
+  LLMFormattingAnalysisResult,
+  HeadingAnalysis,
+  LinkQualityAnalysis,
+  TechnicalStructureAnalysis
+}; 

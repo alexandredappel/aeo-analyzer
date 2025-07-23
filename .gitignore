@@ -48,3 +48,11 @@ LLM-FORMATTING-FIX.md
 PROJECT-STATUS.md
 architecture.md
 OPTIMIZATION-COMPLETE-CLEANUP.md
+
+# Documentation files (except README)
+CHANGELOG.md
+COMPONENTS.md
+DESIGN.md
+
+# Keep README.md tracked
+!README.md

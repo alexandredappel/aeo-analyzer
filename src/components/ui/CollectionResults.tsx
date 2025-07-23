@@ -1,3 +1,7 @@
+import { useState } from 'react';
+import { MainSectionComponent } from '@/components/ui/analysis/MainSectionComponent';
+import { MainSection } from '@/types/analysis-architecture';
+
 interface CollectionResult {
   success: boolean;
   data?: string;
@@ -34,6 +38,8 @@ interface AnalysisBreakdown {
   details: string;
 }
 
+// Legacy DiscoverabilityAnalysis interface - kept for backward compatibility
+// New discoverability uses MainSection from analysis-architecture
 interface DiscoverabilityAnalysis {
   score: number;
   maxScore: number;
@@ -46,70 +52,20 @@ interface DiscoverabilityAnalysis {
   recommendations: string[];
 }
 
-interface StructuredDataAnalysis {
-  category: string;
-  score: number;
-  maxScore: number;
-  breakdown: {
-    jsonLd: AnalysisBreakdown;
-    metaTags: AnalysisBreakdown;
-    openGraph: AnalysisBreakdown;
-  };
-  recommendations: string[];
-}
 
-interface LLMFormattingAnalysis {
-  score: number;
-  maxScore: number;
-  breakdown: {
-    headingStructure: AnalysisBreakdown;
-    semanticElements: AnalysisBreakdown;
-    structuredContent: AnalysisBreakdown;
-    citationsReferences: AnalysisBreakdown;
-  };
-  recommendations: string[];
-  validation?: {
-    valid: boolean;
-    issues: string[];
-    warnings: string[];
-  };
-}
 
-interface AccessibilityAnalysis {
-  score: number;
-  maxScore: number;
-  breakdown: {
-    criticalDOM: AnalysisBreakdown;
-    performance: AnalysisBreakdown;
-    images: AnalysisBreakdown;
-  };
-  recommendations: string[];
-}
 
-interface ReadabilityAnalysis {
-  score: number;
-  maxScore: number;
-  breakdown: {
-    fleschScore: AnalysisBreakdown;
-    sentenceComplexity: AnalysisBreakdown;
-    contentDensity: AnalysisBreakdown;
-  };
-  details: {
-    fleschLevel: string;
-    averageSentenceLength: number;
-    wordCount: number;
-    uniqueWords: number;
-    contentDensityRatio: number;
-  };
-  recommendations: string[];
-}
+
+
+
+
 
 interface AnalysisResults {
-  discoverability?: DiscoverabilityAnalysis;
-  structuredData?: StructuredDataAnalysis;
-  llmFormatting?: LLMFormattingAnalysis;
-  accessibility?: AccessibilityAnalysis;
-  readability?: ReadabilityAnalysis;
+  discoverability?: MainSection;    // New hierarchical structure
+  structuredData?: MainSection;     // New hierarchical structure
+  llmFormatting?: MainSection;      // New hierarchical structure
+  accessibility?: MainSection;      // New hierarchical structure
+  readability?: MainSection;        // New hierarchical structure
   aeoScore?: AEOScore;
 }
 
@@ -219,6 +175,9 @@ function ScoreDisplay({ score, maxScore }: ScoreDisplayProps) {
   );
 }
 
+// Legacy BreakdownSection - replaced by hierarchical MainSectionComponent
+// Keeping for potential backward compatibility needs
+/*
 interface BreakdownSectionProps {
   breakdown: DiscoverabilityAnalysis['breakdown'];
 }
@@ -258,6 +217,7 @@ function BreakdownSection({ breakdown }: BreakdownSectionProps) {
     </div>
   );
 }
+*/
 
 interface RecommendationsListProps {
   recommendations: string[];
@@ -306,152 +266,13 @@ function BreakdownItem({ icon, label, score, maxScore, details }: BreakdownItemP
   );
 }
 
-interface StructuredDataBreakdownSectionProps {
-  breakdown: StructuredDataAnalysis['breakdown'];
-}
 
-function StructuredDataBreakdownSection({ breakdown }: StructuredDataBreakdownSectionProps) {
-  const breakdownItems = [
-    { key: 'jsonLd', label: 'JSON-LD Schema' },
-    { key: 'metaTags', label: 'Meta Tags' },
-    { key: 'openGraph', label: 'OpenGraph Tags' }
-  ] as const;
 
-  return (
-    <div className="mb-6">
-      <h4 className="text-gray-200 font-medium mb-3">📋 Breakdown:</h4>
-      <div className="space-y-2">
-        {breakdownItems.map(({ key, label }) => {
-          const item = breakdown[key];
-          if (!item) return null;
-          
-          return (
-            <BreakdownItem
-              key={key}
-              icon={getStatusIcon(item.status)}
-              label={label}
-              score={item.score}
-              maxScore={item.maxScore}
-              details={item.details}
-            />
-          );
-        })}
-      </div>
-    </div>
-  );
-}
 
-interface LLMFormattingBreakdownSectionProps {
-  breakdown: LLMFormattingAnalysis['breakdown'];
-}
 
-function LLMFormattingBreakdownSection({ breakdown }: LLMFormattingBreakdownSectionProps) {
-  const breakdownItems = [
-    {
-      key: 'headingStructure',
-      icon: '📋',
-      label: 'Heading Structure'
-    },
-    {
-      key: 'semanticElements',
-      icon: '🏗️',
-      label: 'Semantic HTML5'
-    },
-    {
-      key: 'structuredContent',
-      icon: '📊',
-      label: 'Structured Content'
-    },
-    {
-      key: 'citationsReferences',
-      icon: '🔗',
-      label: 'Citations & Links'
-    }
-  ] as const;
 
-  return (
-    <div className="mb-6">
-      <h4 className="text-gray-200 font-medium mb-3">📋 Breakdown:</h4>
-      <div className="space-y-2">
-        {breakdownItems.map(({ key, icon, label }) => {
-          const item = breakdown[key];
-          if (!item) return null;
-          
-          return (
-            <BreakdownItem
-              key={key}
-              icon={icon}
-              label={label}
-              score={item.score}
-              maxScore={item.maxScore}
-              details={item.details}
-            />
-          );
-        })}
-      </div>
-    </div>
-  );
-}
 
-function AccessibilityBreakdownSection({ breakdown }: { breakdown: AccessibilityAnalysis['breakdown'] }) {
-  const items = [
-    { key: 'criticalDOM', icon: '🔍', label: 'Critical DOM' },
-    { key: 'performance', icon: '⚡', label: 'Performance' },
-    { key: 'images', icon: '🖼️', label: 'Images Accessibility' }
-  ] as const;
 
-  return (
-    <div className="mb-6">
-      <h4 className="text-gray-200 font-medium mb-3">📋 Breakdown:</h4>
-      <div className="space-y-2">
-        {items.map(({ key, icon, label }) => {
-          const item = breakdown[key];
-          if (!item) return null;
-          return (
-            <BreakdownItem
-              key={key}
-              icon={icon}
-              label={label}
-              score={item.score}
-              maxScore={item.maxScore}
-              details={item.details}
-            />
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function ReadabilityBreakdownSection({ breakdown }: { breakdown: ReadabilityAnalysis['breakdown'] }) {
-  const items = [
-    { key: 'fleschScore', icon: '📖', label: 'Flesch-Kincaid Score' },
-    { key: 'sentenceComplexity', icon: '🔤', label: 'Sentence Complexity' },
-    { key: 'contentDensity', icon: '📊', label: 'Content Density' }
-  ] as const;
-
-  return (
-    <div className="mb-6">
-      <h4 className="text-gray-200 font-medium mb-3">📋 Breakdown:</h4>
-      <div className="space-y-2">
-        {items.map(({ key, icon, label }) => {
-          const item = breakdown[key];
-          if (!item) return null;
-          return (
-            <BreakdownItem
-              key={key}
-              icon={icon}
-              label={label}
-              score={item.score}
-              maxScore={item.maxScore}
-              details={item.details}
-            />
-          );
-        })}
-      </div>
-    </div>
-  );
-}
 
 function GlobalAEOScoreSection({ aeoScore, isLoading }: { aeoScore?: AEOScore; isLoading: boolean }) {
   if (isLoading && !aeoScore) {
@@ -469,7 +290,7 @@ function GlobalAEOScoreSection({ aeoScore, isLoading }: { aeoScore?: AEOScore; i
 
   const items = [
     { key: 'discoverability', label: 'Discoverability', color: getScoreColor(breakdown.discoverability.score, 100), value: breakdown.discoverability.score },
-    { key: 'structuredData', label: 'Structured', color: getScoreColor(breakdown.structuredData.score, 100), value: breakdown.structuredData.score },
+            { key: 'structuredData', label: 'Structured', color: getScoreColor(breakdown.structuredData.score, 100), value: breakdown.structuredData.score },
     { key: 'llmFormatting', label: 'Formatting', color: getScoreColor(breakdown.llmFormatting.score, 100), value: breakdown.llmFormatting.score },
     { key: 'accessibility', label: 'Accessibility', color: getScoreColor(breakdown.accessibility.score, 100), value: breakdown.accessibility.score },
     { key: 'readability', label: 'Readability', color: getScoreColor(breakdown.readability.score, 100), value: breakdown.readability.score },
@@ -502,6 +323,22 @@ function GlobalAEOScoreSection({ aeoScore, isLoading }: { aeoScore?: AEOScore; i
 }
 
 export function CollectionResults({ data, analysisResults, isLoading, isAnalysisCompleted }: CollectionResultsProps) {
+  // State management for hierarchical drawer expansion
+  const [expandedDrawers, setExpandedDrawers] = useState<Set<string>>(new Set());
+
+  const toggleDrawer = (sectionId: string, drawerId: string) => {
+    const key = `${sectionId}-${drawerId}`;
+    setExpandedDrawers(prev => {
+      const newExpanded = new Set(prev);
+      if (newExpanded.has(key)) {
+        newExpanded.delete(key);
+      } else {
+        newExpanded.add(key);
+      }
+      return newExpanded;
+    });
+  };
+
   if (isLoading && !data) {
     return null;
   }
@@ -624,226 +461,470 @@ export function CollectionResults({ data, analysisResults, isLoading, isAnalysis
       ) : null}
       </div>
 
-      {/* Discoverability Analysis Section */}
+      {/* New Hierarchical Discoverability Section */}
       {isAnalysisCompleted && analysisResults?.discoverability && (
-        <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-          <h3 className="text-lg font-semibold text-gray-200 mb-4">
-            🔍 Discoverability Analysis
-          </h3>
-          
-          <ScoreDisplay 
-            score={analysisResults.discoverability.score} 
-            maxScore={analysisResults.discoverability.maxScore} 
-          />
-          
-          <BreakdownSection breakdown={analysisResults.discoverability.breakdown} />
-          
-          <RecommendationsList recommendations={analysisResults.discoverability.recommendations} />
-        </div>
+        <MainSectionComponent
+          section={analysisResults.discoverability}
+          globalPenalties={[]} // TODO: Get from API response
+          className="mb-6"
+        />
       )}
 
-      {/* Structured Data Analysis Section */}
+      {/* New Hierarchical Structured Data */}
       {isAnalysisCompleted && analysisResults?.structuredData && (
-        <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-          <h3 className="text-lg font-semibold text-gray-200 mb-4">
-            📊 Structured Data Analysis
-          </h3>
-          
-          <ScoreDisplay 
-            score={analysisResults.structuredData.score} 
-            maxScore={analysisResults.structuredData.maxScore} 
-          />
-          
-          <StructuredDataBreakdownSection breakdown={analysisResults.structuredData.breakdown} />
-          
-          <RecommendationsList recommendations={analysisResults.structuredData.recommendations} />
-        </div>
+        <MainSectionComponent
+          section={analysisResults.structuredData}
+        />
       )}
 
-      {/* LLM Formatting Analysis Section */}
+      {/* New Hierarchical LLM Formatting */}
       {isAnalysisCompleted && analysisResults?.llmFormatting && (
-        <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-          <h3 className="text-lg font-semibold text-gray-200 mb-4">
-            ⚡ LLM-Friendly Formatting Analysis
-          </h3>
-          
-          <ScoreDisplay 
-            score={analysisResults.llmFormatting.score} 
-            maxScore={analysisResults.llmFormatting.maxScore} 
-          />
-          
-          <LLMFormattingBreakdownSection breakdown={analysisResults.llmFormatting.breakdown} />
-          
-          <RecommendationsList recommendations={analysisResults.llmFormatting.recommendations} />
-
-          {analysisResults.llmFormatting.validation && !analysisResults.llmFormatting.validation.valid && (
-            <div className="mt-4 p-3 bg-red-900/20 border border-red-700 rounded-lg">
-              <div className="flex items-center text-red-400 text-sm font-medium mb-2">
-                <span className="mr-2">⚠️</span>
-                <span>Validation Issues:</span>
-              </div>
-              <ul className="text-red-300 text-sm space-y-1">
-                {analysisResults.llmFormatting.validation.issues.map((issue, index) => (
-                  <li key={index} className="flex items-start">
-                    <span className="mr-2">•</span>
-                    <span>{issue}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
+        <MainSectionComponent
+          section={analysisResults.llmFormatting}
+        />
       )}
 
-      {/* Accessibility Analysis */}
+      {/* New Hierarchical Accessibility */}
       {isAnalysisCompleted && analysisResults?.accessibility && (
-        <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-          <h3 className="text-lg font-semibold text-gray-200 mb-4">
-            ♿ Accessibility Analysis
-          </h3>
-          
-          <ScoreDisplay 
-            score={analysisResults.accessibility.score} 
-            maxScore={analysisResults.accessibility.maxScore} 
-          />
-          
-          <AccessibilityBreakdownSection breakdown={analysisResults.accessibility.breakdown} />
-          <RecommendationsList recommendations={analysisResults.accessibility.recommendations} />
-
-          {/* Critical DOM Warning */}
-          {analysisResults.accessibility.breakdown.criticalDOM.score < 70 && (
-            <div className="mt-4 p-3 bg-yellow-900/20 border border-yellow-700 rounded-lg">
-              <div className="flex items-center text-yellow-400 text-sm font-medium mb-2">
-                <span className="mr-2">⚠️</span>
-                <span>Critical DOM Warning:</span>
-              </div>
-              <p className="text-yellow-300 text-sm">
-                Content heavily relies on JavaScript. Consider server-side rendering for better LLM accessibility.
-              </p>
-            </div>
-          )}
-        </div>
+        <MainSectionComponent
+          section={analysisResults.accessibility}
+        />
       )}
 
-      {/* Readability Analysis */}
+      {/* New Hierarchical Readability */}
       {isAnalysisCompleted && analysisResults?.readability && (
-        <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-          <h3 className="text-lg font-semibold text-gray-200 mb-4">
-            📖 Readability Analysis
-          </h3>
-          
-          <ScoreDisplay 
-            score={analysisResults.readability.score} 
-            maxScore={analysisResults.readability.maxScore} 
-          />
-
-          {/* Readability Level Badge */}
-          <div className="mb-4">
-            <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-900/30 border border-blue-700 text-blue-300">
-              <span className="mr-2">📚</span>
-              {analysisResults.readability.details.fleschLevel} Level
-            </div>
-          </div>
-
-          {/* Readability Details */}
-          <div className="mb-4 p-3 bg-gray-700 rounded border border-gray-600">
-            <h4 className="text-gray-200 font-medium mb-2">📊 Text Statistics:</h4>
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              <div><span className="text-gray-400">Words:</span> <span className="text-gray-200">{analysisResults.readability.details.wordCount.toLocaleString()}</span></div>
-              <div><span className="text-gray-400">Unique Words:</span> <span className="text-gray-200">{analysisResults.readability.details.uniqueWords.toLocaleString()}</span></div>
-              <div><span className="text-gray-400">Avg. Sentence Length:</span> <span className="text-gray-200">{analysisResults.readability.details.averageSentenceLength} words</span></div>
-              <div><span className="text-gray-400">Content Density:</span> <span className="text-gray-200">{(analysisResults.readability.details.contentDensityRatio * 100).toFixed(1)}%</span></div>
-            </div>
-          </div>
-          
-          <ReadabilityBreakdownSection breakdown={analysisResults.readability.breakdown} />
-          <RecommendationsList recommendations={analysisResults.readability.recommendations} />
-
-          {/* Readability Level Warning */}
-          {analysisResults.readability.details.fleschLevel === 'Expert' && analysisResults.readability.score < 70 && (
-            <div className="mt-4 p-3 bg-yellow-900/20 border border-yellow-700 rounded-lg">
-              <div className="flex items-center text-yellow-400 text-sm font-medium mb-2">
-                <span className="mr-2">⚠️</span>
-                <span>Complexity Warning:</span>
-              </div>
-              <p className="text-yellow-300 text-sm">
-                Content is at Expert level complexity. Consider simplifying language for better LLM understanding and broader audience accessibility.
-              </p>
-            </div>
-          )}
-        </div>
+        <MainSectionComponent
+          section={analysisResults.readability}
+        />
       )}
 
       {/* Analysis in Progress */}
       {isLoading && !isAnalysisCompleted && (
         <>
-          <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-            <h3 className="text-lg font-semibold text-gray-200 mb-4">
-              🔍 Discoverability Analysis
-            </h3>
-            <div className="flex items-center gap-3 p-3 bg-gray-700 rounded border border-gray-600">
-              <div className="w-4 h-4 bg-blue-500 rounded animate-pulse"></div>
-              <span className="text-gray-300">Analysis in progress...</span>
+          {/* New Hierarchical Discoverability Loading */}
+          <div className="bg-gray-950 rounded-xl border border-gray-800 overflow-hidden mb-6">
+            <div className="bg-gradient-to-r from-gray-900 to-gray-800 px-8 py-6 border-b border-gray-700">
+              <div className="flex items-center gap-4">
+                <div className="text-4xl">🔍</div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="h-8 bg-gray-600 rounded animate-pulse w-48"></div>
+                    <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
+                  </div>
+                  <div className="h-4 bg-gray-700 rounded animate-pulse w-64"></div>
+                </div>
+                <div className="text-right">
+                  <div className="h-10 bg-gray-600 rounded animate-pulse w-20 mb-1"></div>
+                  <div className="h-6 bg-gray-700 rounded animate-pulse w-16 mb-1"></div>
+                  <div className="h-4 bg-gray-700 rounded animate-pulse w-14"></div>
+                </div>
+              </div>
+            </div>
+            <div className="p-6">
+              <div className="space-y-4">
+                {/* Foundation Drawer Loading */}
+                <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
+                  <div className="px-6 py-4 flex items-center justify-between">
+                    <div className="flex items-center gap-4 flex-1">
+                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
+                      <div className="flex-1">
+                        <div className="h-5 bg-gray-600 rounded animate-pulse w-40 mb-1"></div>
+                        <div className="h-4 bg-gray-700 rounded animate-pulse w-56"></div>
+                      </div>
+                    </div>
+                    <div className="text-right flex items-center gap-4">
+                      <div>
+                        <div className="h-5 bg-gray-600 rounded animate-pulse w-16 mb-1"></div>
+                        <div className="h-4 bg-gray-700 rounded animate-pulse w-12"></div>
+                      </div>
+                      <div className="w-5 h-5 bg-gray-600 rounded animate-pulse"></div>
+                    </div>
+                  </div>
+                </div>
+                {/* AI Access Drawer Loading */}
+                <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
+                  <div className="px-6 py-4 flex items-center justify-between">
+                    <div className="flex items-center gap-4 flex-1">
+                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
+                      <div className="flex-1">
+                        <div className="h-5 bg-gray-600 rounded animate-pulse w-32 mb-1"></div>
+                        <div className="h-4 bg-gray-700 rounded animate-pulse w-48"></div>
+                      </div>
+                    </div>
+                    <div className="text-right flex items-center gap-4">
+                      <div>
+                        <div className="h-5 bg-gray-600 rounded animate-pulse w-16 mb-1"></div>
+                        <div className="h-4 bg-gray-700 rounded animate-pulse w-12"></div>
+                      </div>
+                      <div className="w-5 h-5 bg-gray-600 rounded animate-pulse"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="flex gap-2 justify-end mt-6">
+                <div className="h-6 bg-gray-700 rounded animate-pulse w-24"></div>
+                <div className="h-6 bg-gray-700 rounded animate-pulse w-20"></div>
+              </div>
             </div>
           </div>
           
-          <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-            <h3 className="text-lg font-semibold text-gray-200 mb-4">
-              📊 Structured Data Analysis
-            </h3>
-            <div className="flex items-center gap-3 p-3 bg-gray-700 rounded border border-gray-600">
-              <div className="w-4 h-4 bg-blue-500 rounded animate-pulse"></div>
-              <span className="text-gray-300">Analysis in progress...</span>
-            </div>
-          </div>
-
-          <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-            <h3 className="text-lg font-semibold text-gray-200 mb-4">
-              ⚡ LLM-Friendly Formatting Analysis
-            </h3>
-            <div className="flex items-center gap-3 p-3 bg-gray-700 rounded border border-gray-600">
-              <div className="w-4 h-4 bg-blue-500 rounded animate-pulse"></div>
-              <span className="text-gray-300">Analysis in progress...</span>
-            </div>
-          </div>
-
-          {/* Loading - Accessibility */}
-          {isLoading && !isAnalysisCompleted && (
-            <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-              <h3 className="text-lg font-semibold text-gray-200 mb-4">♿ Accessibility Analysis</h3>
-              <div className="space-y-3">
-                <div className="flex items-center gap-3 p-3 bg-gray-700 rounded border border-gray-600">
-                  <div className="w-4 h-4 bg-blue-500 rounded animate-pulse"></div>
-                  <span className="text-gray-300">Launching Puppeteer browser...</span>
+          {/* New Hierarchical Structured Data Loading */}
+          <div className="bg-gray-950 rounded-xl border border-gray-800 overflow-hidden mb-6">
+            <div className="bg-gradient-to-r from-gray-900 to-gray-800 px-8 py-6 border-b border-gray-700">
+              <div className="flex items-center gap-4">
+                <div className="text-4xl">📋</div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="h-8 bg-gray-600 rounded animate-pulse w-48"></div>
+                    <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
+                  </div>
+                  <div className="h-4 bg-gray-700 rounded animate-pulse w-64"></div>
                 </div>
-                <div className="flex items-center gap-3 p-3 bg-gray-700 rounded border border-gray-600">
-                  <div className="w-4 h-4 bg-purple-500 rounded animate-pulse"></div>
-                  <span className="text-gray-300">Analyzing Critical DOM...</span>
+                <div className="text-right">
+                  <div className="h-10 bg-gray-600 rounded animate-pulse w-20 mb-1"></div>
+                  <div className="h-6 bg-gray-700 rounded animate-pulse w-16 mb-1"></div>
+                  <div className="h-4 bg-gray-700 rounded animate-pulse w-14"></div>
                 </div>
               </div>
             </div>
-          )}
+            <div className="p-6">
+              <div className="space-y-4">
+                {/* JSON-LD Analysis Drawer Loading */}
+                <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
+                  <div className="px-6 py-4 flex items-center justify-between">
+                    <div className="flex items-center gap-4 flex-1">
+                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
+                      <div className="flex-1">
+                        <div className="h-5 bg-gray-600 rounded animate-pulse w-40 mb-1"></div>
+                        <div className="h-4 bg-gray-700 rounded animate-pulse w-56"></div>
+                      </div>
+                    </div>
+                    <div className="text-right flex items-center gap-4">
+                      <div>
+                        <div className="h-5 bg-gray-600 rounded animate-pulse w-16 mb-1"></div>
+                        <div className="h-4 bg-gray-700 rounded animate-pulse w-12"></div>
+                      </div>
+                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
+                    </div>
+                  </div>
+                </div>
 
-          {/* Loading - Readability */}
-          {isLoading && !isAnalysisCompleted && (
-            <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-              <h3 className="text-lg font-semibold text-gray-200 mb-4">📖 Readability Analysis</h3>
-              <div className="space-y-3">
-                <div className="flex items-center gap-3 p-3 bg-gray-700 rounded border border-gray-600">
-                  <div className="w-4 h-4 bg-green-500 rounded animate-pulse"></div>
-                  <span className="text-gray-300">Analyzing text readability...</span>
+                {/* Meta Tags Analysis Drawer Loading */}
+                <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
+                  <div className="px-6 py-4 flex items-center justify-between">
+                    <div className="flex items-center gap-4 flex-1">
+                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
+                      <div className="flex-1">
+                        <div className="h-5 bg-gray-600 rounded animate-pulse w-44 mb-1"></div>
+                        <div className="h-4 bg-gray-700 rounded animate-pulse w-48"></div>
+                      </div>
+                    </div>
+                    <div className="text-right flex items-center gap-4">
+                      <div>
+                        <div className="h-5 bg-gray-600 rounded animate-pulse w-16 mb-1"></div>
+                        <div className="h-4 bg-gray-700 rounded animate-pulse w-12"></div>
+                      </div>
+                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex items-center gap-3 p-3 bg-gray-700 rounded border border-gray-600">
-                  <div className="w-4 h-4 bg-blue-500 rounded animate-pulse"></div>
-                  <span className="text-gray-300">Calculating Flesch-Kincaid score...</span>
-                </div>
-                <div className="flex items-center gap-3 p-3 bg-gray-700 rounded border border-gray-600">
-                  <div className="w-4 h-4 bg-purple-500 rounded animate-pulse"></div>
-                  <span className="text-gray-300">Analyzing sentence complexity...</span>
+
+                {/* Social Meta Analysis Drawer Loading */}
+                <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
+                  <div className="px-6 py-4 flex items-center justify-between">
+                    <div className="flex items-center gap-4 flex-1">
+                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
+                      <div className="flex-1">
+                        <div className="h-5 bg-gray-600 rounded animate-pulse w-48 mb-1"></div>
+                        <div className="h-4 bg-gray-700 rounded animate-pulse w-52"></div>
+                      </div>
+                    </div>
+                    <div className="text-right flex items-center gap-4">
+                      <div>
+                        <div className="h-5 bg-gray-600 rounded animate-pulse w-16 mb-1"></div>
+                        <div className="h-4 bg-gray-700 rounded animate-pulse w-12"></div>
+                      </div>
+                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
-          )}
+          </div>
+
+          {/* New Hierarchical LLM Formatting Loading */}
+          <div className="bg-gray-950 rounded-xl border border-gray-800 overflow-hidden mb-6">
+            <div className="bg-gradient-to-r from-gray-900 to-gray-800 px-8 py-6 border-b border-gray-700">
+              <div className="flex items-center gap-4">
+                <div className="text-4xl">🤖</div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="h-8 bg-gray-600 rounded animate-pulse w-48"></div>
+                    <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
+                  </div>
+                  <div className="h-4 bg-gray-700 rounded animate-pulse w-64"></div>
+                </div>
+                <div className="text-right">
+                  <div className="h-10 bg-gray-600 rounded animate-pulse w-20 mb-1"></div>
+                  <div className="h-6 bg-gray-700 rounded animate-pulse w-16 mb-1"></div>
+                  <div className="h-4 bg-gray-700 rounded animate-pulse w-14"></div>
+                </div>
+              </div>
+            </div>
+            <div className="p-6">
+              <div className="space-y-4">
+                {/* Heading Structure Drawer Loading */}
+                <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
+                  <div className="px-6 py-4 flex items-center justify-between">
+                    <div className="flex items-center gap-4 flex-1">
+                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
+                      <div className="flex-1">
+                        <div className="h-5 bg-gray-600 rounded animate-pulse w-44 mb-1"></div>
+                        <div className="h-4 bg-gray-700 rounded animate-pulse w-60"></div>
+                      </div>
+                    </div>
+                    <div className="text-right flex items-center gap-4">
+                      <div>
+                        <div className="h-5 bg-gray-600 rounded animate-pulse w-16 mb-1"></div>
+                        <div className="h-4 bg-gray-700 rounded animate-pulse w-12"></div>
+                      </div>
+                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Semantic HTML5 Drawer Loading */}
+                <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
+                  <div className="px-6 py-4 flex items-center justify-between">
+                    <div className="flex items-center gap-4 flex-1">
+                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
+                      <div className="flex-1">
+                        <div className="h-5 bg-gray-600 rounded animate-pulse w-40 mb-1"></div>
+                        <div className="h-4 bg-gray-700 rounded animate-pulse w-58"></div>
+                      </div>
+                    </div>
+                    <div className="text-right flex items-center gap-4">
+                      <div>
+                        <div className="h-5 bg-gray-600 rounded animate-pulse w-16 mb-1"></div>
+                        <div className="h-4 bg-gray-700 rounded animate-pulse w-12"></div>
+                      </div>
+                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Link Quality Drawer Loading */}
+                <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
+                  <div className="px-6 py-4 flex items-center justify-between">
+                    <div className="flex items-center gap-4 flex-1">
+                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
+                      <div className="flex-1">
+                        <div className="h-5 bg-gray-600 rounded animate-pulse w-36 mb-1"></div>
+                        <div className="h-4 bg-gray-700 rounded animate-pulse w-54"></div>
+                      </div>
+                    </div>
+                    <div className="text-right flex items-center gap-4">
+                      <div>
+                        <div className="h-5 bg-gray-600 rounded animate-pulse w-16 mb-1"></div>
+                        <div className="h-4 bg-gray-700 rounded animate-pulse w-12"></div>
+                      </div>
+                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Technical Structure Drawer Loading */}
+                <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
+                  <div className="px-6 py-4 flex items-center justify-between">
+                    <div className="flex items-center gap-4 flex-1">
+                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
+                      <div className="flex-1">
+                        <div className="h-5 bg-gray-600 rounded animate-pulse w-46 mb-1"></div>
+                        <div className="h-4 bg-gray-700 rounded animate-pulse w-56"></div>
+                      </div>
+                    </div>
+                    <div className="text-right flex items-center gap-4">
+                      <div>
+                        <div className="h-5 bg-gray-600 rounded animate-pulse w-16 mb-1"></div>
+                        <div className="h-4 bg-gray-700 rounded animate-pulse w-12"></div>
+                      </div>
+                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* New Hierarchical Accessibility Loading */}
+          <div className="bg-gray-950 rounded-xl border border-gray-800 overflow-hidden mb-6">
+            <div className="bg-gradient-to-r from-gray-900 to-gray-800 px-8 py-6 border-b border-gray-700">
+              <div className="flex items-center gap-4">
+                <div className="text-4xl">♿</div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="h-8 bg-gray-600 rounded animate-pulse w-48"></div>
+                    <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
+                  </div>
+                  <div className="h-4 bg-gray-700 rounded animate-pulse w-64"></div>
+                </div>
+                <div className="text-right">
+                  <div className="h-10 bg-gray-600 rounded animate-pulse w-20 mb-1"></div>
+                  <div className="h-6 bg-gray-700 rounded animate-pulse w-16 mb-1"></div>
+                  <div className="h-4 bg-gray-700 rounded animate-pulse w-14"></div>
+                </div>
+              </div>
+            </div>
+            <div className="p-6">
+              <div className="space-y-4">
+                {/* Critical DOM Drawer Loading */}
+                <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
+                  <div className="px-6 py-4 flex items-center justify-between">
+                    <div className="flex items-center gap-4 flex-1">
+                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
+                      <div className="flex-1">
+                        <div className="h-5 bg-gray-600 rounded animate-pulse w-36 mb-1"></div>
+                        <div className="h-4 bg-gray-700 rounded animate-pulse w-64"></div>
+                      </div>
+                    </div>
+                    <div className="text-right flex items-center gap-4">
+                      <div>
+                        <div className="h-5 bg-gray-600 rounded animate-pulse w-16 mb-1"></div>
+                        <div className="h-4 bg-gray-700 rounded animate-pulse w-12"></div>
+                      </div>
+                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Performance Drawer Loading */}
+                <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
+                  <div className="px-6 py-4 flex items-center justify-between">
+                    <div className="flex items-center gap-4 flex-1">
+                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
+                      <div className="flex-1">
+                        <div className="h-5 bg-gray-600 rounded animate-pulse w-32 mb-1"></div>
+                        <div className="h-4 bg-gray-700 rounded animate-pulse w-60"></div>
+                      </div>
+                    </div>
+                    <div className="text-right flex items-center gap-4">
+                      <div>
+                        <div className="h-5 bg-gray-600 rounded animate-pulse w-16 mb-1"></div>
+                        <div className="h-4 bg-gray-700 rounded animate-pulse w-12"></div>
+                      </div>
+                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Images Accessibility Drawer Loading */}
+                <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
+                  <div className="px-6 py-4 flex items-center justify-between">
+                    <div className="flex items-center gap-4 flex-1">
+                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
+                      <div className="flex-1">
+                        <div className="h-5 bg-gray-600 rounded animate-pulse w-48 mb-1"></div>
+                        <div className="h-4 bg-gray-700 rounded animate-pulse w-58"></div>
+                      </div>
+                    </div>
+                    <div className="text-right flex items-center gap-4">
+                      <div>
+                        <div className="h-5 bg-gray-600 rounded animate-pulse w-16 mb-1"></div>
+                        <div className="h-4 bg-gray-700 rounded animate-pulse w-12"></div>
+                      </div>
+                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* New Hierarchical Readability Loading */}
+          <div className="bg-gray-950 rounded-xl border border-gray-800 overflow-hidden mb-6">
+            <div className="bg-gradient-to-r from-gray-900 to-gray-800 px-8 py-6 border-b border-gray-700">
+              <div className="flex items-center gap-4">
+                <div className="text-4xl">📖</div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="h-8 bg-gray-600 rounded animate-pulse w-48"></div>
+                    <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
+                  </div>
+                  <div className="h-4 bg-gray-700 rounded animate-pulse w-64"></div>
+                </div>
+                <div className="text-right">
+                  <div className="h-10 bg-gray-600 rounded animate-pulse w-20 mb-1"></div>
+                  <div className="h-6 bg-gray-700 rounded animate-pulse w-16 mb-1"></div>
+                  <div className="h-4 bg-gray-700 rounded animate-pulse w-14"></div>
+                </div>
+              </div>
+            </div>
+            <div className="p-6">
+              <div className="space-y-4">
+                {/* Text Complexity Drawer Loading */}
+                <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
+                  <div className="px-6 py-4 flex items-center justify-between">
+                    <div className="flex items-center gap-4 flex-1">
+                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
+                      <div className="flex-1">
+                        <div className="h-5 bg-gray-600 rounded animate-pulse w-40 mb-1"></div>
+                        <div className="h-4 bg-gray-700 rounded animate-pulse w-56"></div>
+                      </div>
+                    </div>
+                    <div className="text-right flex items-center gap-4">
+                      <div>
+                        <div className="h-5 bg-gray-600 rounded animate-pulse w-16 mb-1"></div>
+                        <div className="h-4 bg-gray-700 rounded animate-pulse w-12"></div>
+                      </div>
+                      <div className="w-5 h-5 bg-gray-600 rounded animate-pulse"></div>
+                    </div>
+                  </div>
+                </div>
+                {/* Content Organization Drawer Loading */}
+                <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
+                  <div className="px-6 py-4 flex items-center justify-between">
+                    <div className="flex items-center gap-4 flex-1">
+                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
+                      <div className="flex-1">
+                        <div className="h-5 bg-gray-600 rounded animate-pulse w-44 mb-1"></div>
+                        <div className="h-4 bg-gray-700 rounded animate-pulse w-60"></div>
+                      </div>
+                    </div>
+                    <div className="text-right flex items-center gap-4">
+                      <div>
+                        <div className="h-5 bg-gray-600 rounded animate-pulse w-16 mb-1"></div>
+                        <div className="h-4 bg-gray-700 rounded animate-pulse w-12"></div>
+                      </div>
+                      <div className="w-5 h-5 bg-gray-600 rounded animate-pulse"></div>
+                    </div>
+                  </div>
+                </div>
+                {/* Sentence Quality Drawer Loading */}
+                <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
+                  <div className="px-6 py-4 flex items-center justify-between">
+                    <div className="flex items-center gap-4 flex-1">
+                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
+                      <div className="flex-1">
+                        <div className="h-5 bg-gray-600 rounded animate-pulse w-36 mb-1"></div>
+                        <div className="h-4 bg-gray-700 rounded animate-pulse w-52"></div>
+                      </div>
+                    </div>
+                    <div className="text-right flex items-center gap-4">
+                      <div>
+                        <div className="h-5 bg-gray-600 rounded animate-pulse w-16 mb-1"></div>
+                        <div className="h-4 bg-gray-700 rounded animate-pulse w-12"></div>
+                      </div>
+                      <div className="w-5 h-5 bg-gray-600 rounded animate-pulse"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="flex gap-2 justify-end mt-6">
+                <div className="h-6 bg-gray-700 rounded animate-pulse w-24"></div>
+                <div className="h-6 bg-gray-700 rounded animate-pulse w-20"></div>
+              </div>
+            </div>
+          </div>
         </>
       )}
     </div>

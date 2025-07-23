@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { trackAnalysisComplete, trackAnalysisError } from '@/utils/analytics';
+import { MainSection } from '@/types/analysis-architecture';
 
 type AnalysisState = 'idle' | 'running' | 'completed' | 'error';
 
@@ -22,51 +23,45 @@ interface DiscoverabilityAnalysis {
   recommendations: string[];
 }
 
-interface StructuredDataAnalysis {
-  category: string;
+
+
+
+
+
+
+
+
+interface ScoreContribution {
   score: number;
-  maxScore: number;
-  breakdown: {
-    jsonLd: AnalysisBreakdown;
-    metaTags: AnalysisBreakdown;
-    openGraph: AnalysisBreakdown;
-  };
-  recommendations: string[];
+  weight: number;
+  contribution: number;
 }
 
-interface LLMFormattingAnalysis {
-  score: number;
+interface AEOScore {
+  totalScore: number;
   maxScore: number;
   breakdown: {
-    headingStructure: AnalysisBreakdown;
-    semanticElements: AnalysisBreakdown;
-    structuredContent: AnalysisBreakdown;
-    citationsReferences: AnalysisBreakdown;
+    discoverability: ScoreContribution;
+    structuredData: ScoreContribution;
+    llmFormatting: ScoreContribution;
+    accessibility: ScoreContribution;
+    readability: ScoreContribution;
   };
-  recommendations: string[];
-  validation?: {
-    valid: boolean;
-    issues: string[];
-    warnings: string[];
+  completeness: string;
+  metadata: {
+    totalWeight: number;
+    completedAnalyses: number;
+    totalAnalyses: number;
   };
-}
-
-interface AccessibilityAnalysis {
-  score: number;
-  maxScore: number;
-  breakdown: {
-    criticalDOM: AnalysisBreakdown;
-    performance: AnalysisBreakdown;
-    images: AnalysisBreakdown;
-  };
-  recommendations: string[];
 }
 
 interface AnalysisResults {
-  discoverability?: DiscoverabilityAnalysis;
-  structuredData?: StructuredDataAnalysis;
-  llmFormatting?: LLMFormattingAnalysis;
-  accessibility?: AccessibilityAnalysis;
+  discoverability?: MainSection; // New hierarchical structure
+  structuredData?: MainSection; // New hierarchical structure
+  llmFormatting?: MainSection; // New hierarchical structure
+  accessibility?: MainSection; // New hierarchical structure
+  readability?: MainSection; // New hierarchical structure
+  aeoScore?: AEOScore;
 }
 
 interface CollectionResult {

@@ -7,4 +7,7 @@ export { BackButton } from './BackButton';
 export { AnalysisPlaceholder } from './AnalysisPlaceholder';
 export { AnalysisLogs } from './AnalysisLogs';
 export { CollectionResults } from './CollectionResults';
-export { LoadingSpinner } from './LoadingSpinner'; 
+export { LoadingSpinner } from './LoadingSpinner';
+
+// Composants d'analyse hiérarchique
+export * from './analysis'; 
