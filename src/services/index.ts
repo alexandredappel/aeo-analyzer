@@ -39,97 +39,111 @@ export type {
   ScoreMetadata
 } from './aeo-score-calculator';
 
-// Structured Data Analyzer (2C)
-export { StructuredDataAnalyzer } from './structured-data-analyzer';
-export { default as structuredDataAnalyzer } from './structured-data-analyzer';
-
-export type {
-  StructuredDataResult,
-  CriteriaWeights as StructuredDataCriteriaWeights,
-  CompletenessValidation,
-  ValidationDetails,
-  TitleAnalysis,
-  DescriptionAnalysis,
-  TechnicalMetaAnalysis,
-  ImageValidation,
-  UrlContext,
-  Recommendation as StructuredDataRecommendation
+// Structured Data Analyzer (3A)
+export {
+  analyzeStructuredData,
+  SCHEMA_WEIGHTS,
+  UNKNOWN_SCHEMA_BONUS,
+  REQUIRED_SCHEMA_FIELDS,
+  parseJSONLD,
+  calculateDiversityBonus,
+  analyzeJSONLDPresence,
+  analyzeSchemaTypesCompleteness,
+  analyzeTitleTag,
+  analyzeMetaDescription,
+  analyzeTechnicalMeta,
+  analyzeOpenGraphBasic,
+  analyzeOpenGraphImage
 } from './structured-data-analyzer';
 
-// Accessibility Analyzer (2C)
-export { AccessibilityAnalyzer } from './accessibility-analyzer';
-export { default as accessibilityAnalyzer } from './accessibility-analyzer';
+export type {
+  StructuredDataAnalysisResult,
+  JSONLDData
+} from './structured-data-analyzer';
+
+// Accessibility Analyzer (5A) - Performance-focused with SharedSemanticHTML5Analyzer
+export { 
+  AccessibilityAnalyzer,
+  analyzeAccessibility,
+  CRITICAL_DOM_WEIGHTS,
+  PERFORMANCE_WEIGHTS,
+  IMAGES_WEIGHTS
+} from './accessibility-analyzer';
 
 export type {
-  AccessibilityResult,
-  AnalysisBreakdown,
-  CriticalDOMResult,
-  PageSpeedResult,
-  ImageResult,
-  AccessibilityElements,
-  CoreWebVitals,
-  Opportunity,
-  AccessibilityIssue,
-  ImageIssue
+  AccessibilityAnalysisResult
 } from './accessibility-analyzer';
 
 // Discoverability Analyzer (2C)
 export {
   analyzeDiscoverability,
-  analyzeHttps,
-  analyzeHttpStatus,
-  analyzeRobotsAiBots,
-  analyzeSitemap,
+  analyzeHTTPS,
+  analyzeHTTPStatus,
+  analyzeRobotsAIBots,
+  analyzeSitemapQuality,
   parseRobotsTxt,
   isBotAllowed,
   AI_BOTS
 } from './discoverability-analyzer';
 
 export type {
-  DiscoverabilityResult,
-  DiscoverabilityBreakdown,
+  DiscoverabilityAnalysisResult,
   CollectedData,
   RobotRules
 } from './discoverability-analyzer';
 
-// LLM Formatting Analyzer (2D)
-export { LLMFormattingAnalyzer } from './llm-formatting-analyzer';
-export { default as llmFormattingAnalyzer } from './llm-formatting-analyzer';
-
-export type {
-  LLMFormattingResult,
-  CriteriaWeights as LLMCriteriaWeights,
-  ContentType,
-  HierarchyAnalysis,
-  HeadingContentAnalysis,
-  HeadingContentAdvanced,
-  HeadingSemanticValue,
-  SemanticStructureAnalysis,
-  AccessibilityFeatures,
-  ContentFlow,
-  StructureAnalysis,
-  ReadabilityAnalysis as LLMReadabilityAnalysis,
-  DensityAnalysis,
-  LinkAnalysis,
-  AccessibilityValidation,
-  LLMOptimization,
-  Recommendation as LLMRecommendation,
-  ValidationResult
+// LLM Formatting Analyzer (4A)
+export {
+  analyzeLLMFormatting,
+  AUTHORITATIVE_DOMAINS,
+  NON_DESCRIPTIVE_PATTERNS,
+  analyzeHeadingHierarchy,
+  analyzeHeadingQuality,
+  analyzeHeadingSemanticValue,
+  analyzeStructuralElements,
+  analyzeAccessibilityFeatures,
+  analyzeContentFlow,
+  analyzeInternalLinks,
+  analyzeExternalLinks,
+  analyzeLinkContextQuality,
+  analyzeCleanMarkup,
+  analyzeNavigationStructure
 } from './llm-formatting-analyzer';
 
-// Readability Analyzer (2D)
-export { ReadabilityAnalyzer } from './readability-analyzer';
-export { default as readabilityAnalyzer } from './readability-analyzer';
+// Shared Analyzers (4A)
+export {
+  SharedSemanticHTML5Analyzer,
+  SEMANTIC_ELEMENTS,
+  STRUCTURAL_WEIGHTS,
+  CONTENT_FLOW_WEIGHTS
+} from './shared/semantic-html5-analyzer';
 
 export type {
-  ReadabilityResult,
-  ReadabilityWeights,
-  ReadabilityBreakdown,
-  ReadabilityDetails,
-  ReadabilityRecommendation,
-  AnalysisOptions,
-  ComplexityMetric,
-  ScoreAnalysis
+  LLMFormattingAnalysisResult,
+  HeadingAnalysis,
+  LinkQualityAnalysis,
+  TechnicalStructureAnalysis
+} from './llm-formatting-analyzer';
+
+// Shared Analyzer Types (4A)
+export type {
+  SharedSemanticHTML5Result,
+  StructuralElementAnalysis,
+  AccessibilityFeatureAnalysis,
+  ContentFlowAnalysis
+} from './shared/semantic-html5-analyzer';
+
+// Readability Analyzer (6A) - Editorial content quality for content creators
+export { 
+  ReadabilityAnalyzer,
+  analyzeReadability,
+  TEXT_COMPLEXITY_WEIGHTS,
+  CONTENT_ORGANIZATION_WEIGHTS,
+  SENTENCE_QUALITY_WEIGHTS
+} from './readability-analyzer';
+
+export type {
+  ReadabilityAnalysisResult
 } from './readability-analyzer';
 
 // 🎉 ALL SERVICES MIGRATED - Migration Complete! 🎉 

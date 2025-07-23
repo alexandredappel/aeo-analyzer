@@ -17,21 +17,43 @@ import {
   MAX_CONTENT_SIZE,
   
   // Analyseurs
-  StructuredDataAnalyzer,
-  AccessibilityAnalyzer,
-  analyzeDiscoverability,
-  LLMFormattingAnalyzer,
-  ReadabilityAnalyzer,
+  analyzeStructuredData,
+  analyzeLLMFormatting,
+  analyzeAccessibility,
+  analyzeReadability,
   
   // Types
   type CrawlResult,
-  type StructuredDataResult,
-  type AccessibilityResult,
-  type DiscoverabilityResult,
-  type LLMFormattingResult,
-  type ReadabilityResult,
+  type StructuredDataAnalysisResult,
+  type AccessibilityAnalysisResult,
+  type LLMFormattingAnalysisResult,
+  type ReadabilityAnalysisResult,
   type AEOScoreResult
 } from '@/services';
+
+// New Discoverability System
+import { 
+  analyzeDiscoverability,
+  type DiscoverabilityAnalysisResult 
+} from '@/services/discoverability-analyzer';
+import { 
+  DiscoverabilityTransformer,
+  discoverabilityTransformer 
+} from '@/transformers/discoverability-transformer';
+
+// New Structured Data System
+import { StructuredDataTransformer } from '@/transformers/structured-data-transformer';
+
+// New LLM Formatting System
+import { LLMFormattingTransformer } from '@/transformers/llm-formatting-transformer';
+
+// New Accessibility System
+import { AccessibilityTransformer } from '@/transformers/accessibility-transformer';
+
+// New Readability System
+import { ReadabilityTransformer } from '@/transformers/readability-transformer';
+
+import { MainSection } from '@/types/analysis-architecture';
 
 /**
  * Custom logger that captures logs for response
@@ -90,11 +112,11 @@ interface CollectedData {
 }
 
 interface AnalysisResults {
-  discoverability?: DiscoverabilityResult;
-  structuredData?: StructuredDataResult;
-  llmFormatting?: LLMFormattingResult;
-  accessibility?: AccessibilityResult;
-  readability?: ReadabilityResult;
+  discoverability?: MainSection;
+  structuredData?: MainSection; // New hierarchical structure
+  llmFormatting?: MainSection; // New hierarchical structure
+  accessibility?: MainSection; // New hierarchical structure
+  readability?: MainSection; // New hierarchical structure
   aeoScore?: AEOScoreResult;
 }
 
@@ -154,6 +176,12 @@ export async function POST(request: Request): Promise<Response> {
   const responseLogger = new ResponseLogger();
   const startTime = Date.now();
   
+  // Initialize performance timer for comprehensive measurement
+  const { PerformanceTimer, MemoryOptimizer } = await import('@/services/performance-config');
+  const performanceTimer = new PerformanceTimer();
+  
+  responseLogger.info('🚀 AEO Analysis started with performance monitoring');
+  
   try {
     // Parse request body
     const body: CollectDataRequest = await request.json();
@@ -196,6 +224,7 @@ export async function POST(request: Request): Promise<Response> {
     
     // Collect data in parallel for better performance
     responseLogger.info('Starting parallel data collection...');
+    performanceTimer.startPhase('dataCollection');
     
     const [htmlResult, robotsResult, sitemapResult] = await Promise.allSettled([
       (async () => {
@@ -258,6 +287,7 @@ export async function POST(request: Request): Promise<Response> {
     const partialSuccess = successCount > 0 && successCount < totalCount;
     
     const collectionTime = Date.now() - startTime;
+    performanceTimer.endPhase('dataCollection');
     
     // Extract basic metadata if HTML was successful
     let basicMetadata = {};
@@ -299,76 +329,138 @@ export async function POST(request: Request): Promise<Response> {
     // Discoverability analysis can work with just URL, robots.txt, and sitemap
     try {
       responseLogger.info('Starting discoverability analysis...');
+      performanceTimer.startPhase('discoverability');
       
-      const discoverabilityResult = analyzeDiscoverability(collectedData);
-      analysisResults.discoverability = discoverabilityResult;
+      // Use new hierarchical discoverability analyzer
+      const discoverabilityAnalysisResult = analyzeDiscoverability(collectedData);
       
-      responseLogger.success(`Discoverability analysis completed! Score: ${discoverabilityResult.score}/100`);
-      responseLogger.info(`Analysis result structure: category=${discoverabilityResult.category}, score=${discoverabilityResult.score}`);
+      // Transform to UI structure
+      const transformedDiscoverability = discoverabilityTransformer.transform(discoverabilityAnalysisResult);
+      analysisResults.discoverability = transformedDiscoverability;
+      
+      responseLogger.success(`Discoverability analysis completed! Score: ${transformedDiscoverability.totalScore}/${transformedDiscoverability.maxScore}`);
+      responseLogger.info(`Analysis result structure: section=${transformedDiscoverability.name}, drawers=${transformedDiscoverability.drawers.length}`);
+      
+      // Log global penalties if any
+      if (discoverabilityAnalysisResult.globalPenalties.length > 0) {
+        responseLogger.warn(`Global penalties detected: ${discoverabilityAnalysisResult.globalPenalties.length} penalties`);
+        discoverabilityAnalysisResult.globalPenalties.forEach(penalty => {
+          responseLogger.warn(`Penalty: ${penalty.description} (${Math.round(penalty.penaltyFactor * 100)}% impact)`);
+        });
+      }
+      
+      performanceTimer.endPhase('discoverability');
       
     } catch (error) {
       responseLogger.error(`Discoverability analysis failed: ${(error as Error).message}`);
+      performanceTimer.endPhase('discoverability');
     }
     
     // Structured data analysis requires HTML content
     if (htmlData.success && htmlData.data) {
       try {
-        responseLogger.info('Starting structured data analysis...');
+        responseLogger.info('🏗️ Starting structured data analysis...');
+        performanceTimer.startPhase('structuredData');
         
-        const structuredDataAnalyzer = new StructuredDataAnalyzer();
-        const structuredDataResult = await structuredDataAnalyzer.analyze(htmlData.data, normalizedUrl.href);
-        analysisResults.structuredData = structuredDataResult;
+        // New structured data analysis
+        const structuredDataResult = analyzeStructuredData(htmlData.data, normalizedUrl.href);
         
-        responseLogger.success(`Structured data analysis completed! Score: ${structuredDataResult.score}/100`);
-        responseLogger.info(`Structured data breakdown: JSON-LD=${structuredDataResult.breakdown.jsonLd.score}, Meta=${structuredDataResult.breakdown.metaTags.score}, OG=${structuredDataResult.breakdown.openGraph.score}`);
+        // Transform to UI structure
+        const structuredDataTransformer = new StructuredDataTransformer();
+        const transformedStructuredData = structuredDataTransformer.transform(structuredDataResult);
+        
+        // Add to results
+        analysisResults.structuredData = transformedStructuredData;
+        
+        // Enhanced logging
+        responseLogger.success(`Structured data analysis completed! Score: ${transformedStructuredData.totalScore}/${transformedStructuredData.maxScore}`);
+        responseLogger.info(`🏗️ Structured Data Details: JSON-LD=${structuredDataResult.rawData?.jsonLdFound ? 'Yes' : 'No'}, Schemas=${structuredDataResult.rawData?.detectedSchemas?.length || 0}, Title=${structuredDataResult.rawData?.titleTag?.length || 0}chars, Description=${structuredDataResult.rawData?.metaDescription?.length || 0}chars, OG=${structuredDataResult.rawData?.openGraph?.title && structuredDataResult.rawData?.openGraph?.description ? 'Complete' : 'Incomplete'}, Drawers=${transformedStructuredData.drawers.length}`);
+        
+        performanceTimer.endPhase('structuredData');
         
       } catch (error) {
         responseLogger.error(`Structured data analysis failed: ${(error as Error).message}`);
+        performanceTimer.endPhase('structuredData');
       }
       
-      // LLM formatting analysis
-      try {
-        responseLogger.info('Starting LLM-friendly formatting analysis...');
-        
-        const llmFormattingAnalyzer = new LLMFormattingAnalyzer();
-        const llmFormattingResult = await llmFormattingAnalyzer.analyze(htmlData.data, normalizedUrl.href);
-        analysisResults.llmFormatting = llmFormattingResult;
-        
-        responseLogger.success(`LLM formatting analysis completed! Score: ${llmFormattingResult.score}/100`);
-        responseLogger.info(`LLM formatting breakdown: Headings=${llmFormattingResult.breakdown.headingStructure.score}, Semantic=${llmFormattingResult.breakdown.semanticElements.score}, Structured=${llmFormattingResult.breakdown.structuredContent.score}, Citations=${llmFormattingResult.breakdown.citationsReferences.score}`);
-        
-      } catch (error) {
-        responseLogger.error(`LLM formatting analysis failed: ${(error as Error).message}`);
+      // LLM formatting analysis requires HTML content
+      if (htmlData.success && htmlData.data) {
+        try {
+          responseLogger.info('🤖 Starting LLM formatting analysis...');
+          performanceTimer.startPhase('llmFormatting');
+          
+          // New LLM formatting analysis
+          const llmFormattingResult = analyzeLLMFormatting(htmlData.data, normalizedUrl.href);
+          
+          // Transform to UI structure
+          const llmFormattingTransformer = new LLMFormattingTransformer();
+          const transformedLLMFormatting = llmFormattingTransformer.transform(llmFormattingResult);
+          
+          // Add to results
+          analysisResults.llmFormatting = transformedLLMFormatting;
+          
+          // Enhanced logging
+          responseLogger.success(`LLM formatting analysis completed! Score: ${transformedLLMFormatting.totalScore}/${transformedLLMFormatting.maxScore}`);
+          responseLogger.info(`🤖 LLM Formatting Details: Headings=${llmFormattingResult.rawData?.headingStructure?.totalHeadings || 0}, SemanticRatio=${Math.round((llmFormattingResult.rawData?.semanticHTML5?.semanticRatio || 0) * 100)}%, Links=${llmFormattingResult.rawData?.linkQuality?.totalLinks || 0}, CleanMarkup=${llmFormattingResult.rawData?.technicalStructure?.cleanMarkup || 0}/8, Drawers=${transformedLLMFormatting.drawers.length}`);
+          
+          performanceTimer.endPhase('llmFormatting');
+          
+        } catch (error) {
+          responseLogger.error(`LLM formatting analysis failed: ${(error as Error).message}`);
+          performanceTimer.endPhase('llmFormatting');
+        }
       }
       
       // Accessibility analysis
       try {
-        responseLogger.info('Starting accessibility analysis...');
+        responseLogger.info('♿ Starting accessibility analysis...');
+        performanceTimer.startPhase('accessibility');
         
-        const accessibilityAnalyzer = new AccessibilityAnalyzer();
-        const accessibilityResult = await accessibilityAnalyzer.analyze(htmlData.data, normalizedUrl.href);
-        analysisResults.accessibility = accessibilityResult;
+        // New accessibility analysis
+        const accessibilityResult = await analyzeAccessibility(htmlData.data, normalizedUrl.href);
         
-        responseLogger.success(`Accessibility analysis completed! Score: ${accessibilityResult.score}/100`);
-        responseLogger.info(`Accessibility breakdown: Critical DOM=${accessibilityResult.breakdown.criticalDOM.score}, Performance=${accessibilityResult.breakdown.performance.score}, Images=${accessibilityResult.breakdown.images.score}`);
+        // Transform to UI structure
+        const accessibilityTransformer = new AccessibilityTransformer();
+        const transformedAccessibility = accessibilityTransformer.transform(accessibilityResult);
+        
+        // Add to results
+        analysisResults.accessibility = transformedAccessibility;
+        
+        // Enhanced logging
+        responseLogger.success(`Accessibility analysis completed! Score: ${transformedAccessibility.totalScore}/${transformedAccessibility.maxScore}`);
+        responseLogger.info(`♿ Accessibility Details: ContentRatio=${Math.round((accessibilityResult.rawData?.criticalDOM?.contentRatio || 0) * 100)}%, StaticNav=${accessibilityResult.rawData?.criticalDOM?.navigationAccess || 0}, PageSpeed=${accessibilityResult.rawData?.performance?.pageSpeedScore || 'N/A'}, CoreWebVitals=${accessibilityResult.rawData?.performance?.coreWebVitals ? 'Available' : 'Unavailable'}, AltText=${Math.round(accessibilityResult.rawData?.imagesAccessibility?.altTextCoverage || 0)}%, Images=${accessibilityResult.rawData?.imagesAccessibility?.totalImages || 0}, Drawers=${transformedAccessibility.drawers.length}`);
+        
+        performanceTimer.endPhase('accessibility');
         
       } catch (error) {
         responseLogger.error(`Accessibility analysis failed: ${(error as Error).message}`);
+        performanceTimer.endPhase('accessibility');
       }
       
       // Readability analysis
       try {
-        responseLogger.info('Starting readability analysis...');
+        responseLogger.info('📖 Starting readability analysis...');
+        performanceTimer.startPhase('readability');
         
-        const readabilityAnalyzer = new ReadabilityAnalyzer();
-        const readabilityResult = await readabilityAnalyzer.analyze(htmlData.data, normalizedUrl.href);
-        analysisResults.readability = readabilityResult;
+        // New readability analysis
+        const readabilityResult = await analyzeReadability(htmlData.data, normalizedUrl.href);
         
-        responseLogger.success(`Readability analysis completed! Score: ${readabilityResult.score}/100`);
-        responseLogger.info(`Readability breakdown: Flesch=${readabilityResult.breakdown.fleschScore.score}, Complexity=${readabilityResult.breakdown.sentenceComplexity.score}, Density=${readabilityResult.breakdown.contentDensity.score}`);
+        // Transform to UI structure
+        const readabilityTransformer = new ReadabilityTransformer();
+        const transformedReadability = readabilityTransformer.transform(readabilityResult);
+        
+        // Add to results
+        analysisResults.readability = transformedReadability;
+        
+        // Enhanced logging
+        responseLogger.success(`Readability analysis completed! Score: ${transformedReadability.totalScore}/${transformedReadability.maxScore}`);
+        responseLogger.info(`📖 Readability Details: FleschScore=${readabilityResult.rawData?.textComplexity?.fleschScore || 'N/A'}, AvgSentence=${readabilityResult.rawData?.sentenceQuality?.averageSentenceLength || 0}words, ContentDensity=${Math.round((readabilityResult.rawData?.contentOrganization?.contentDensity?.textToHTMLRatio || 0) * 100)}%, VocabDiversity=${Math.round((readabilityResult.rawData?.sentenceQuality?.vocabularyDiversity || 0) * 100)}%, Paragraphs=${readabilityResult.rawData?.contentOrganization?.paragraphStructure?.totalParagraphs || 0}, Drawers=${transformedReadability.drawers.length}`);
+        
+        performanceTimer.endPhase('readability');
         
       } catch (error) {
         responseLogger.error(`Readability analysis failed: ${(error as Error).message}`);
+        performanceTimer.endPhase('readability');
       }
     } else {
       responseLogger.info('Skipping structured data, LLM formatting, accessibility, and readability analysis - HTML content not available');
@@ -386,6 +478,8 @@ export async function POST(request: Request): Promise<Response> {
         const result = analysisResults[type as keyof AnalysisResults];
         if (result && 'score' in result && 'maxScore' in result) {
           responseLogger.info(`${type} score: ${result.score}/${result.maxScore}`);
+        } else if (result && 'totalScore' in result && 'maxScore' in result) {
+          responseLogger.info(`${type} score: ${result.totalScore}/${result.maxScore}`);
         }
       });
     }
@@ -394,6 +488,7 @@ export async function POST(request: Request): Promise<Response> {
     if (Object.keys(analysisResults).length > 0) {
       try {
         responseLogger.info('Starting AEO score calculation...');
+        performanceTimer.startPhase('scoreCalculation');
         
         const aeoScoreCalculator = new AEOScoreCalculator();
         const aeoScoreResult = aeoScoreCalculator.calculateAEOScore(analysisResults);
@@ -403,12 +498,30 @@ export async function POST(request: Request): Promise<Response> {
         responseLogger.success(`AEO score calculation completed: ${aeoScoreResult.totalScore}/100`);
         responseLogger.info(`AEO score breakdown: ${aeoScoreResult.completeness}`);
         
+        performanceTimer.endPhase('scoreCalculation');
+        
       } catch (error) {
         responseLogger.error(`AEO score calculation failed: ${(error as Error).message}`);
+        performanceTimer.endPhase('scoreCalculation');
       }
     } else {
       responseLogger.info('Skipping AEO score calculation - no analysis results available');
     }
+
+    // Mark transformation phase as completed (transformers were run within each analysis)
+    performanceTimer.startPhase('transformation');
+    performanceTimer.endPhase('transformation');
+
+    // Generate comprehensive performance report
+    const performanceReport = performanceTimer.getReport();
+    const memoryReport = MemoryOptimizer.checkMemoryUsage();
+    
+    // Log performance summary
+    responseLogger.info(`⚡ Performance Report: Total=${performanceReport.totalTime}ms, Memory=${memoryReport.used}MB (${memoryReport.percentage}%), Benchmarks: ${performanceReport.benchmarkStatus.totalTime === 'pass' ? '✅' : '❌'} Time, ${performanceReport.benchmarkStatus.memory === 'pass' ? '✅' : '❌'} Memory, ${performanceReport.benchmarkStatus.coreAnalysis === 'pass' ? '✅' : '❌'} Core`);
+    responseLogger.info(`⚡ Phase Breakdown: Collection=${performanceReport.phases.dataCollection}ms, Discoverability=${performanceReport.phases.discoverability}ms, StructuredData=${performanceReport.phases.structuredData}ms, LLM=${performanceReport.phases.llmFormatting}ms, Accessibility=${performanceReport.phases.accessibility}ms, Readability=${performanceReport.phases.readability}ms, Score=${performanceReport.phases.scoreCalculation}ms`);
+    
+    // Memory cleanup
+    MemoryOptimizer.cleanup([htmlData, robotsData, sitemapData, analysisResults]);
 
     // Calculate final total time
     const finalTotalTime = Date.now() - startTime;
@@ -448,6 +561,8 @@ export async function POST(request: Request): Promise<Response> {
         const result = response.analysis![analysisType as keyof AnalysisResults];
         if (result && 'score' in result) {
           responseLogger.info(`${analysisType} score in response: ${result.score}`);
+        } else if (result && 'totalScore' in result) {
+          responseLogger.info(`${analysisType} score in response: ${result.totalScore}`);
         }
       });
     }
