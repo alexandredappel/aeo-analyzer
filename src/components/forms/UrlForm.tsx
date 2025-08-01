@@ -67,11 +67,11 @@ export const UrlForm = forwardRef<UrlFormRef, UrlFormProps>(
             {...register("url")}
             type="text"
             placeholder="Enter website URL to analyze..."
-            className="w-full px-4 py-4 text-lg bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-400"
+            className="w-full px-4 py-4 text-lg bg-white border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 placeholder-gray-500"
             disabled={isSubmitting}
           />
           {errors.url && (
-            <p className="text-red-400 text-sm text-left">
+            <p className="text-red-600 text-sm text-left">
               {errors.url.message}
             </p>
           )}
@@ -81,7 +81,7 @@ export const UrlForm = forwardRef<UrlFormRef, UrlFormProps>(
           id="analyze-website-btn"
           type="submit"
           disabled={isSubmitting}
-          className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed text-white font-semibold py-4 px-6 rounded-lg text-lg transition-colors duration-200"
+          className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed text-white font-semibold py-4 px-6 rounded-lg text-lg transition-colors duration-200 shadow-lg hover:shadow-xl"
         >
           {isSubmitting ? "Starting Analysis..." : "Analyze Website"}
         </button>

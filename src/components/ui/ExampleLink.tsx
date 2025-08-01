@@ -5,11 +5,11 @@ interface ExampleLinkProps {
 
 export function ExampleLink({ onExampleClick, exampleUrl }: ExampleLinkProps) {
   return (
-    <div className="text-gray-400">
+    <div className="text-gray-600">
       <span>Try: </span>
       <button
         onClick={onExampleClick}
-        className="text-blue-400 hover:text-blue-300 underline transition-colors duration-200"
+        className="text-blue-600 hover:text-blue-700 underline transition-colors duration-200"
       >
         {exampleUrl}
       </button>

@@ -123,8 +123,8 @@ export class StructuredDataTransformer {
     return {
       id: 'structured-data',
       name: 'Structured Data',
-      emoji: '📋',
-      description: 'Schema markup and metadata for search engines and AI',
+      emoji: '\ud83d\udccb',
+      description: 'Does your content have proper schema markup for AI understanding?',
       weightPercentage: 25,
       totalScore,
       maxScore: 100,
@@ -292,8 +292,8 @@ export class StructuredDataTransformer {
     return {
       id: 'structured-data',
       name: 'Structured Data',
-      emoji: '📋',
-      description: 'Analysis failed',
+      emoji: '\ud83d\udccb',
+      description: 'Does your content have proper schema markup for AI understanding?',
       weightPercentage: 25,
       totalScore: 0,
       maxScore: 100,
