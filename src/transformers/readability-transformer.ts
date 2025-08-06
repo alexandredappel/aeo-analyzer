@@ -13,7 +13,8 @@ import {
   MainSection, 
   DrawerSubSection, 
   MetricCard, 
-  PerformanceStatus 
+  PerformanceStatus,
+  Recommendation
 } from '@/types/analysis-architecture';
 import { ReadabilityAnalysisResult } from '@/services/readability-analyzer';
 
@@ -96,11 +97,11 @@ export class ReadabilityTransformer {
    */
   private transformLegacyFormat(result: LegacyReadabilityResult): MainSection {
     // Reconstruct complete structure from legacy data
-    const textComplexityDrawer = this.createLegacyTextComplexityDrawer(result);
+    // Text Complexity drawer removed - replaced by new Text Clarity analysis
+    // Sentence Quality drawer removed - replaced by new Linguistic Precision analysis
     const contentOrganizationDrawer = this.createLegacyContentOrganizationDrawer(result);
-    const sentenceQualityDrawer = this.createLegacySentenceQualityDrawer(result);
 
-    const totalScore = textComplexityDrawer.totalScore + contentOrganizationDrawer.totalScore + sentenceQualityDrawer.totalScore;
+    const totalScore = contentOrganizationDrawer.totalScore;
     
     return {
       id: 'readability',
@@ -111,45 +112,13 @@ export class ReadabilityTransformer {
       totalScore,
       maxScore: 100,
       status: this.calculateStatus(totalScore, 100),
-      drawers: [textComplexityDrawer, contentOrganizationDrawer, sentenceQualityDrawer]
+      drawers: [contentOrganizationDrawer]
     };
   }
 
   /**
    * Creates Text Complexity drawer for legacy format
    */
-  private createLegacyTextComplexityDrawer(result: LegacyReadabilityResult): DrawerSubSection {
-    const score = result.breakdown?.fleschScore?.score || 0;
-    const maxScore = 40;
-    
-    // Create fallback card when detailed data isn't available
-    const fleschScoreCard: MetricCard = {
-      id: 'flesch-score',
-      name: 'Flesch Score',
-      score: Math.round(score * 0.4), // Convert to 40pt scale
-      maxScore: 40,
-      status: this.calculateStatus(score * 0.4, 40),
-      explanation: 'Measures content readability using the Flesch Reading Ease formula. Optimal scores (60-80) ensure content is accessible to both human readers and AI systems for better comprehension and engagement.',
-      problems: score < 60 ? ['Content complexity may be too high for optimal comprehension'] : [],
-      solutions: score < 60 ? ['Shorten sentences to 15-25 words for better clarity', 'Use simpler vocabulary where possible', 'Break down complex ideas into smaller, digestible parts'] : [],
-      successMessage: 'Excellent! Your content readability is optimized for both humans and AI.',
-      rawData: { 
-        legacyScore: score,
-        fleschLevel: result.details?.fleschLevel || 'Unknown'
-      }
-    };
-
-    return {
-      id: 'text-complexity',
-      name: 'Text Complexity',
-      description: 'Flesch readability score optimized for human and AI comprehension',
-      totalScore: Math.round(score * 0.4),
-      maxScore,
-      status: this.calculateStatus(score * 0.4, maxScore),
-      cards: [fleschScoreCard],
-      isExpanded: false
-    };
-  }
 
   /**
    * Creates Content Organization drawer for legacy format
@@ -201,58 +170,7 @@ export class ReadabilityTransformer {
     };
   }
 
-  /**
-   * Creates Sentence Quality drawer for legacy format
-   */
-  private createLegacySentenceQualityDrawer(result: LegacyReadabilityResult): DrawerSubSection {
-    const fleschScore = result.breakdown?.fleschScore?.score || 0;
-    const totalScore = Math.round(fleschScore * 0.25); // Convert to 25pt scale
-    const maxScore = 25;
-    
-    const averageLengthCard: MetricCard = {
-      id: 'average-length',
-      name: 'Average Length',
-      score: Math.round(fleschScore * 0.15), // 15/100 of flesch score
-      maxScore: 15,
-      status: this.calculateStatus(fleschScore * 0.15, 15),
-      explanation: 'Evaluates the average length of sentences for optimal comprehension. Sentences in the 15-25 word range provide the best balance of information density and readability for both human readers and AI systems.',
-      problems: fleschScore < 60 ? ['Sentence length may need optimization'] : [],
-      solutions: fleschScore < 60 ? ['Aim for 15-25 words per sentence for optimal readability', 'Break long sentences into shorter, clearer statements'] : [],
-      successMessage: 'Excellent! Your sentence length is optimal for comprehension.',
-      rawData: { 
-        legacyScore: fleschScore,
-        averageSentenceLength: result.details?.averageSentenceLength || 0
-      }
-    };
 
-    const vocabularyDiversityCard: MetricCard = {
-      id: 'vocabulary-diversity',
-      name: 'Vocabulary Diversity',
-      score: Math.round(fleschScore * 0.1), // 10/100 of flesch score
-      maxScore: 10,
-      status: this.calculateStatus(fleschScore * 0.1, 10),
-      explanation: 'Measures the diversity of vocabulary used in the content. Rich vocabulary diversity engages readers and demonstrates expertise while maintaining accessibility and avoiding unnecessary complexity.',
-      problems: fleschScore < 60 ? ['Vocabulary diversity could be enhanced'] : [],
-      solutions: fleschScore < 60 ? ['Use varied vocabulary while maintaining accessibility', 'Replace repeated words with synonyms where appropriate'] : [],
-      successMessage: 'Great! Your vocabulary diversity engages readers while staying accessible.',
-      rawData: { 
-        legacyScore: fleschScore,
-        uniqueWords: result.details?.uniqueWords || 0,
-        totalWords: result.details?.wordCount || 0
-      }
-    };
-
-    return {
-      id: 'sentence-quality',
-      name: 'Sentence Quality',
-      description: 'Sentence length and vocabulary diversity for clear communication',
-      totalScore,
-      maxScore,
-      status: this.calculateStatus(totalScore, maxScore),
-      cards: [averageLengthCard, vocabularyDiversityCard],
-      isExpanded: false
-    };
-  }
 
   /**
    * Enhances drawer with additional validation and normalization
@@ -268,16 +186,51 @@ export class ReadabilityTransformer {
   }
 
   /**
-   * Enhances individual card with validation
+   * Enhances individual card with validation and unified normalization
+   * Handles both new Recommendation[] format and legacy problems/solutions format
    */
   private enhanceCard(card: MetricCard): MetricCard {
+    // Initialize unified recommendations array
+    let unifiedRecommendations: Recommendation[] = [];
+    
+    // Step 1: Add new format recommendations if they exist
+    if (card.recommendations && Array.isArray(card.recommendations)) {
+      unifiedRecommendations.push(...card.recommendations);
+    }
+    
+    // Step 2: Convert legacy problems to recommendations if they exist
+    if (card.problems && Array.isArray(card.problems)) {
+      card.problems.forEach((problem: string) => {
+        unifiedRecommendations.push({
+          problem: problem,
+          solution: "Consult the relevant documentation or use a validation tool.",
+          impact: 5
+        });
+      });
+    }
+    
+    // Step 3: If we have legacy solutions but no problems, create generic recommendations
+    if (card.solutions && Array.isArray(card.solutions) && (!card.problems || card.problems.length === 0)) {
+      card.solutions.forEach((solution: string) => {
+        unifiedRecommendations.push({
+          problem: "General improvement opportunity identified.",
+          solution: solution,
+          impact: 5
+        });
+      });
+    }
+    
+    // Return normalized card with unified recommendations format
     return {
       ...card,
       // Ensure status is calculated correctly
       status: this.calculateStatus(card.score, card.maxScore),
+      // Use unified recommendations array
+      recommendations: unifiedRecommendations,
+      // Remove legacy fields to ensure clean output
+      problems: undefined,
+      solutions: undefined,
       // Ensure all required fields are present
-      problems: card.problems || [],
-      solutions: card.solutions || [],
       successMessage: card.successMessage || 'Analysis completed successfully.'
     };
   }
@@ -307,8 +260,11 @@ export class ReadabilityTransformer {
       maxScore: 100,
       status: 'error',
       explanation: 'An error occurred during readability analysis.',
-      problems: [errorMessage],
-      solutions: ['Please try the analysis again', 'Check your input data for validity'],
+      recommendations: [{
+        problem: errorMessage,
+        solution: 'Please try the analysis again or check your input data for validity.',
+        impact: 10
+      }],
       successMessage: 'Analysis will complete successfully when the error is resolved.',
       rawData: { error: errorMessage }
     };

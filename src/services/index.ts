@@ -137,11 +137,7 @@ export type {
 
 // Readability Analyzer (6A) - Editorial content quality for content creators
 export { 
-  ReadabilityAnalyzer,
-  analyzeReadability,
-  TEXT_COMPLEXITY_WEIGHTS,
-  CONTENT_ORGANIZATION_WEIGHTS,
-  SENTENCE_QUALITY_WEIGHTS
+  analyzeReadability
 } from './readability-analyzer';
 
 export type {

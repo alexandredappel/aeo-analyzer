@@ -454,7 +454,7 @@ export async function POST(request: Request): Promise<Response> {
         
         // Enhanced logging
         responseLogger.success(`Readability analysis completed! Score: ${transformedReadability.totalScore}/${transformedReadability.maxScore}`);
-        responseLogger.info(`📖 Readability Details: FleschScore=${readabilityResult.rawData?.textComplexity?.fleschScore || 'N/A'}, AvgSentence=${readabilityResult.rawData?.sentenceQuality?.averageSentenceLength || 0}words, ContentDensity=${Math.round((readabilityResult.rawData?.contentOrganization?.contentDensity?.textToHTMLRatio || 0) * 100)}%, VocabDiversity=${Math.round((readabilityResult.rawData?.sentenceQuality?.vocabularyDiversity || 0) * 100)}%, Paragraphs=${readabilityResult.rawData?.contentOrganization?.paragraphStructure?.totalParagraphs || 0}, Drawers=${transformedReadability.drawers.length}`);
+        responseLogger.info(`📖 Readability Details: FleschScore=${readabilityResult.rawData?.textComplexity?.fleschScore || 'N/A'}, AvgSentence=${readabilityResult.rawData?.linguisticPrecision?.averageSentenceLength || 0}words, ContentDensity=${Math.round((readabilityResult.rawData?.contentOrganization?.contentDensity?.textToHTMLRatio || 0) * 100)}%, VocabDiversity=${Math.round((readabilityResult.rawData?.linguisticPrecision?.vocabularyDiversity || 0) * 100)}%, Paragraphs=${readabilityResult.rawData?.contentOrganization?.paragraphStructure?.totalParagraphs || 0}, Drawers=${transformedReadability.drawers.length}`);
         
         performanceTimer.endPhase('readability');
         

@@ -2,7 +2,12 @@
   "name": "aeo-auditor",
   "version": "2.0.0",
   "description": "Generative Engine Optimization (GEO) auditing tool with modern hierarchical interface",
-  "keywords": ["geo", "generative engine optimization", "ai optimization", "ai analysis"],
+  "keywords": [
+    "geo",
+    "generative engine optimization",
+    "ai optimization",
+    "ai analysis"
+  ],
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
@@ -24,6 +29,10 @@
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-hook-form": "^7.60.0",
+    "retext": "^9.0.0",
+    "retext-english": "^5.0.0",
+    "retext-passive": "^5.0.0",
+    "syllable": "^5.0.1",
     "zod": "^4.0.5"
   },
   "devDependencies": {
