@@ -11,6 +11,16 @@
 export type PerformanceStatus = 'excellent' | 'good' | 'warning' | 'error';
 
 /**
+ * Recommandation structurée - Combine un problème spécifique avec sa solution
+ */
+export interface Recommendation {
+  /** Description du problème identifié */
+  problem: string;
+  /** Solution recommandée pour résoudre le problème */
+  solution: string;
+}
+
+/**
  * Mapping des couleurs pour chaque statut
  */
 export const STATUS_COLORS: Record<PerformanceStatus, string> = {
@@ -43,11 +53,12 @@ export interface MetricCard {
   /** Explication détaillée de la métrique et de son importance */
   explanation: string;
   
-  /** Liste des problèmes identifiés (vide si aucun problème) */
-  problems: string[];
+  /** Liste des recommandations structurées (problème + solution) - NOUVELLE STRUCTURE */
+  recommendations?: Recommendation[];
   
-  /** Liste des solutions recommandées */
-  solutions: string[];
+  /** ANCIENNE STRUCTURE - Maintenue pour rétrocompatibilité */
+  problems?: string[];
+  solutions?: string[];
   
   /** Message de succès personnalisé affiché quand aucun problème */
   successMessage: string;
@@ -81,6 +92,9 @@ export interface DrawerSubSection {
   
   /** Liste des cartes métriques contenues */
   cards: MetricCard[];
+  
+  /** Liste des éléments qui ont réussi leurs tests (feedback positif) */
+  perfectItems?: string[];
   
   /** État d'expansion du tiroir (pour l'UI) */
   isExpanded?: boolean;
@@ -235,4 +249,4 @@ const _weightsValidation: 100 = (
   SECTION_WEIGHTS.llmFormatting +
   SECTION_WEIGHTS.accessibility +
   SECTION_WEIGHTS.readability
-) as 100; 
+) as 100;

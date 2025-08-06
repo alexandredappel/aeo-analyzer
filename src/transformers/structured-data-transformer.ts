@@ -10,7 +10,8 @@ import {
   MainSection, 
   DrawerSubSection, 
   MetricCard, 
-  PerformanceStatus 
+  PerformanceStatus,
+  Recommendation
 } from '@/types/analysis-architecture';
 import { StructuredDataAnalysisResult } from '@/services/structured-data-analyzer';
 
@@ -145,25 +146,64 @@ export class StructuredDataTransformer {
   }
 
   /**
-   * Enhances card with validation and normalization
+   * Enhances a metric card with calculated status and unifies both new and old data formats
+   * Converts any legacy problems/solutions into the unified recommendations structure
    */
   private enhanceCard(card: MetricCard): MetricCard {
+    // Initialize unified recommendations array
+    let unifiedRecommendations: Recommendation[] = [];
+
+    // 1. Add existing recommendations (new format)
+    if (card.recommendations && card.recommendations.length > 0) {
+      unifiedRecommendations.push(...card.recommendations);
+    }
+
+    // 2. Convert legacy problems to recommendations (old format)
+    if (card.problems && card.problems.length > 0) {
+      for (const problem of card.problems) {
+        unifiedRecommendations.push({
+          problem: problem,
+          solution: "Consult the relevant documentation or use a validation tool."
+        });
+      }
+    }
+
+    // Return clean MetricCard with unified structure (no problems/solutions fields)
     return {
-      ...card,
+      id: card.id,
+      name: card.name,
+      score: card.score,
+      maxScore: card.maxScore,
       status: this.calculateStatus(card.score, card.maxScore),
-      // Ensure all required fields are present
-      problems: card.problems || [],
-      solutions: card.solutions || [],
-      successMessage: card.successMessage || "Everything looks good for this metric!"
+      explanation: card.explanation,
+      recommendations: unifiedRecommendations,
+      successMessage: card.successMessage || "Everything looks good for this metric!",
+      rawData: card.rawData
     };
   }
 
   /**
    * Creates JSON-LD card from legacy data
+   * NOTE: This function is obsolete for the new JSON-LD analysis but kept for backward compatibility
    */
   private createJSONLDCard(jsonldData?: { score: number; status: string }): MetricCard {
     const score = jsonldData?.score || 0;
     const isGood = score > 20;
+
+    const recommendations: Recommendation[] = isGood ? [] : [
+      {
+        problem: "JSON-LD structured data is missing or invalid",
+        solution: "Add valid JSON-LD structured data to your pages"
+      },
+      {
+        problem: "Search engines cannot properly understand your content",
+        solution: "Use Schema.org vocabulary for better understanding"
+      },
+      {
+        problem: "Reduced eligibility for rich snippets",
+        solution: "Test your structured data with Google's Rich Results Test"
+      }
+    ];
 
     return {
       id: 'jsonld-legacy',
@@ -172,16 +212,7 @@ export class StructuredDataTransformer {
       maxScore: 40,
       status: this.calculateStatus(score, 40),
       explanation: "JSON-LD structured data helps search engines and AI understand your content context and purpose.",
-      problems: isGood ? [] : [
-        "JSON-LD structured data is missing or invalid",
-        "Search engines cannot properly understand your content",
-        "Reduced eligibility for rich snippets"
-      ],
-      solutions: isGood ? [] : [
-        "Add valid JSON-LD structured data to your pages",
-        "Use Schema.org vocabulary for better understanding",
-        "Test your structured data with Google's Rich Results Test"
-      ],
+      recommendations,
       successMessage: "Great! Your JSON-LD structured data is properly implemented.",
       rawData: { legacy: true, originalData: jsonldData }
     };
@@ -194,6 +225,21 @@ export class StructuredDataTransformer {
     const score = metaData?.score || 0;
     const isGood = score > 20;
 
+    const recommendations: Recommendation[] = isGood ? [] : [
+      {
+        problem: "Missing or poorly optimized meta tags",
+        solution: "Optimize title tag length (50-60 characters)"
+      },
+      {
+        problem: "Title tag may be too short or too long",
+        solution: "Write compelling meta descriptions (140-160 characters)"
+      },
+      {
+        problem: "Meta description needs optimization",
+        solution: "Include relevant keywords naturally"
+      }
+    ];
+
     return {
       id: 'meta-tags-legacy',
       name: 'Meta Tags',
@@ -201,16 +247,7 @@ export class StructuredDataTransformer {
       maxScore: 35,
       status: this.calculateStatus(score, 35),
       explanation: "Meta tags provide essential information about your page to search engines and browsers.",
-      problems: isGood ? [] : [
-        "Missing or poorly optimized meta tags",
-        "Title tag may be too short or too long",
-        "Meta description needs optimization"
-      ],
-      solutions: isGood ? [] : [
-        "Optimize title tag length (50-60 characters)",
-        "Write compelling meta descriptions (140-160 characters)",
-        "Include relevant keywords naturally"
-      ],
+      recommendations,
       successMessage: "Excellent! Your meta tags are well optimized.",
       rawData: { legacy: true, originalData: metaData }
     };
@@ -223,6 +260,21 @@ export class StructuredDataTransformer {
     const score = ogData?.score || 0;
     const isGood = score > 15;
 
+    const recommendations: Recommendation[] = isGood ? [] : [
+      {
+        problem: "Open Graph tags are missing or incomplete",
+        solution: "Add Open Graph title, description, and image tags"
+      },
+      {
+        problem: "Social media previews may not display correctly",
+        solution: "Include og:url for canonical URL specification"
+      },
+      {
+        problem: "Reduced social engagement potential",
+        solution: "Use high-quality images for social sharing"
+      }
+    ];
+
     return {
       id: 'open-graph-legacy',
       name: 'Open Graph Tags',
@@ -230,16 +282,7 @@ export class StructuredDataTransformer {
       maxScore: 25,
       status: this.calculateStatus(score, 25),
       explanation: "Open Graph tags control how your content appears when shared on social media platforms.",
-      problems: isGood ? [] : [
-        "Open Graph tags are missing or incomplete",
-        "Social media previews may not display correctly",
-        "Reduced social engagement potential"
-      ],
-      solutions: isGood ? [] : [
-        "Add Open Graph title, description, and image tags",
-        "Include og:url for canonical URL specification",
-        "Use high-quality images for social sharing"
-      ],
+      recommendations,
       successMessage: "Perfect! Your Open Graph tags are complete for social sharing.",
       rawData: { legacy: true, originalData: ogData }
     };
@@ -262,6 +305,21 @@ export class StructuredDataTransformer {
    * Creates error section when transformation fails
    */
   private createErrorSection(errorMessage: string): MainSection {
+    const recommendations: Recommendation[] = [
+      {
+        problem: `Error: ${errorMessage}`,
+        solution: "Check if the page HTML is valid and accessible"
+      },
+      {
+        problem: "Analysis could not be completed",
+        solution: "Verify that the URL is correct and reachable"
+      },
+      {
+        problem: "Unexpected error occurred",
+        solution: "Try running the analysis again"
+      }
+    ];
+
     const errorCard: MetricCard = {
       id: 'structured-data-error',
       name: 'Analysis Error',
@@ -269,12 +327,7 @@ export class StructuredDataTransformer {
       maxScore: 100,
       status: 'error',
       explanation: "An error occurred during structured data analysis.",
-      problems: [`Error: ${errorMessage}`],
-      solutions: [
-        "Check if the page HTML is valid and accessible",
-        "Verify that the URL is correct and reachable",
-        "Try running the analysis again"
-      ],
+      recommendations,
       successMessage: "Analysis completed successfully!",
       rawData: { error: errorMessage }
     };

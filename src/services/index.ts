@@ -57,9 +57,12 @@ export {
 } from './structured-data-analyzer';
 
 export type {
-  StructuredDataAnalysisResult,
-  JSONLDData
+  StructuredDataAnalysisResult
 } from './structured-data-analyzer';
+
+export type {
+  JSONLDData
+} from './structured-data-analyzer/shared/types';
 
 // Accessibility Analyzer (5A) - Performance-focused with SharedSemanticHTML5Analyzer
 export { 

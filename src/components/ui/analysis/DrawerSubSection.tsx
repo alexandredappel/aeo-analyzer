@@ -61,6 +61,26 @@ export const DrawerSubSection: React.FC<DrawerSubSectionProps> = ({
           {/* Séparateur */}
           <div className="border-t border-gray-700 mb-6"></div>
           
+          {/* Section "What's perfect" */}
+          {drawer.perfectItems && drawer.perfectItems.length > 0 && (
+            <div className="mb-6">
+              <h4 className="text-sm font-semibold text-green-400 mb-3 flex items-center gap-2">
+                <span>✨</span>
+                What's Perfect
+              </h4>
+              <div className="bg-green-900/20 border border-green-700/50 rounded-lg p-4">
+                <ul className="space-y-2">
+                  {drawer.perfectItems.map((item, index) => (
+                    <li key={index} className="text-sm text-green-300 flex items-start gap-2">
+                      <span className="text-green-400 text-xs mt-1">✓</span>
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+          
           {/* Cartes métriques empilées verticalement */}
           {drawer.cards.length > 0 ? (
             <div className="space-y-2">

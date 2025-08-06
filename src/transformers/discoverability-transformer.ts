@@ -181,8 +181,8 @@ export class DiscoverabilityTransformer {
       ...card,
       name: this.translateCardName(card.id),
       explanation: this.translateExplanation(card.id),
-      problems: this.translateProblems(card.id, card.problems),
-      solutions: this.translateSolutions(card.id, card.solutions),
+      problems: this.translateProblems(card.id, card.problems || []),
+      solutions: this.translateSolutions(card.id, card.solutions || []),
       status: this.calculateStatus(card.score, card.maxScore)
     };
   }
