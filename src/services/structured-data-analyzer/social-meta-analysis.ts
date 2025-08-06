@@ -1,196 +1,217 @@
 /**
  * SOCIAL META ANALYSIS MODULE
- * Analyzes Open Graph and social media meta tags
+ * Analyzes Open Graph and Twitter Card meta tags for LLM optimization
+ * 
+ * New unified architecture with 100-point scoring system
+ * Based on: NOUVELLE-STRUCTURE-SOCIAL-META-ANALYSIS.md
+ * Knowledge Base: PROBLEMES-SOLUTIONS-META-SOCIAL-ANALYSIS.md
  */
 
 import * as cheerio from 'cheerio';
 import { MetricCard, Recommendation } from '@/types/analysis-architecture';
 import { getPerformanceStatus } from './shared/utils';
-import { SOCIAL_META_SCORING } from './shared/constants';
 
 /**
- * Analyzes Open Graph basic tags (15 points)
+ * Extracts all Open Graph and Twitter Card meta tags from HTML
+ * Returns a simple key-value object for easy access
  */
-function analyzeOpenGraphBasic(html: string): MetricCard {
+function extractMetaTags(html: string): Record<string, string> {
   const $ = cheerio.load(html);
-  
-  let score = 0;
-  let recommendations: Recommendation[] = [];
+  const metaTags: Record<string, string> = {};
 
-  // OG Title (4 points)
-  const ogTitle = $('meta[property="og:title"]').first();
-  if (ogTitle.length && ogTitle.attr('content')) {
-    score += 4;
-  } else {
-    recommendations.push({
-      problem: "Open Graph title is missing",
-      solution: "Add Open Graph title for social sharing optimization"
-    });
-  }
-
-  // OG Description (4 points)
-  const ogDesc = $('meta[property="og:description"]').first();
-  if (ogDesc.length && ogDesc.attr('content')) {
-    score += 4;
-  } else {
-    recommendations.push({
-      problem: "Open Graph description is missing",
-      solution: "Include Open Graph description for social previews"
-    });
-  }
-
-  // OG Type (3 points)
-  const ogType = $('meta[property="og:type"]').first();
-  if (ogType.length && ogType.attr('content')) {
-    score += 3;
-  } else {
-    recommendations.push({
-      problem: "Open Graph type is missing",
-      solution: "Set appropriate Open Graph type (article, website, etc.)"
-    });
-  }
-
-  // OG URL (4 points)
-  const ogUrl = $('meta[property="og:url"]').first();
-  if (ogUrl.length && ogUrl.attr('content')) {
-    score += 4;
-  } else {
-    recommendations.push({
-      problem: "Open Graph URL is missing",
-      solution: "Specify canonical URL with og:url property"
-    });
-  }
-
-  return {
-    id: 'open-graph-basic',
-    name: 'Open Graph Basic Tags',
-    score,
-    maxScore: SOCIAL_META_SCORING.OPEN_GRAPH_BASIC,
-    status: getPerformanceStatus(score, SOCIAL_META_SCORING.OPEN_GRAPH_BASIC),
-    explanation: "Open Graph tags control how your content appears when shared on social media platforms. They're also used by AI for content understanding and categorization.",
-    recommendations,
-    successMessage: "Great! Your Open Graph tags are complete for social sharing.",
-    rawData: {
-      title: !!(ogTitle.length && ogTitle.attr('content')),
-      description: !!(ogDesc.length && ogDesc.attr('content')),
-      type: !!(ogType.length && ogType.attr('content')),
-      url: !!(ogUrl.length && ogUrl.attr('content'))
-    }
-  };
-}
-
-/**
- * Analyzes Open Graph image (10 points)
- */
-function analyzeOpenGraphImage(html: string): MetricCard {
-  const $ = cheerio.load(html);
-  
-  let score = 0;
-  let recommendations: Recommendation[] = [];
-
-  // OG Image (7 points)
-  const ogImage = $('meta[property="og:image"]').first();
-  if (ogImage.length && ogImage.attr('content')) {
-    score += 7;
-    
-    // Image dimensions bonus (3 points)
-    const ogImageWidth = $('meta[property="og:image:width"]').first();
-    const ogImageHeight = $('meta[property="og:image:height"]').first();
-    if (ogImageWidth.length && ogImageHeight.length) {
-      score += 3;
-    } else {
-      recommendations.push({
-        problem: "Open Graph image dimensions are missing",
-        solution: "Include image dimensions (og:image:width, og:image:height)"
-      });
-    }
-  } else {
-    recommendations.push({
-      problem: "Open Graph image is missing",
-      solution: "Add Open Graph image for better social media appearance"
-    });
-  }
-
-  if (recommendations.length > 0) {
-    recommendations.push(
-      {
-        problem: "Image quality not optimized for social sharing",
-        solution: "Use high-quality images (minimum 1200x630 pixels recommended)"
-      },
-      {
-        problem: "Image accessibility not ensured",
-        solution: "Ensure image URLs are absolute and accessible"
-      }
-    );
-  }
-
-  return {
-    id: 'open-graph-image',
-    name: 'Open Graph Image',
-    score,
-    maxScore: SOCIAL_META_SCORING.OPEN_GRAPH_IMAGE,
-    status: getPerformanceStatus(score, SOCIAL_META_SCORING.OPEN_GRAPH_IMAGE),
-    explanation: "Open Graph images significantly improve social media engagement and help AI understand visual content context. Proper image metadata ensures consistent display across platforms.",
-    recommendations,
-    successMessage: "Perfect! Your Open Graph image is properly configured.",
-    rawData: {
-      image: !!(ogImage.length && ogImage.attr('content')),
-      dimensions: !!($('meta[property="og:image:width"]').length && $('meta[property="og:image:height"]').length)
-    }
-  };
-}
-
-/**
- * Generates perfect items list for Open Graph drawer
- */
-export function generateOpenGraphPerfectItems(cards: MetricCard[]): string[] {
-  const perfectItems: string[] = [];
-  
-  cards.forEach(card => {
-    if (!card.recommendations || card.recommendations.length === 0) {
-      switch (card.id) {
-        case 'open-graph-basic':
-          perfectItems.push('Open Graph basic tags complete for social sharing');
-          break;
-        case 'open-graph-image':
-          perfectItems.push('Open Graph image properly configured with dimensions');
-          break;
-      }
+  // Extract Open Graph tags (property attribute)
+  $('meta[property^="og:"]').each((_, element) => {
+    const property = $(element).attr('property');
+    const content = $(element).attr('content');
+    if (property && content) {
+      metaTags[property] = content;
     }
   });
-  
-  return perfectItems;
+
+  // Extract Twitter Card tags (name attribute)
+  $('meta[name^="twitter:"]').each((_, element) => {
+    const name = $(element).attr('name');
+    const content = $(element).attr('content');
+    if (name && content) {
+      metaTags[name] = content;
+    }
+  });
+
+  return metaTags;
 }
 
 /**
- * Main social meta analysis function
- * Orchestrates all Open Graph analyses and returns results
+ * Main Social Meta analysis function
+ * Unified analysis with 100-point scoring system
+ * Returns a single MetricCard with comprehensive recommendations
  */
-export function analyzeSocialMeta(html: string): {
-  cards: MetricCard[];
-  perfectItems: string[];
-  totalScore: number;
-  maxScore: number;
-} {
-  // Individual Open Graph analyses
-  const ogBasicCard = analyzeOpenGraphBasic(html);
-  const ogImageCard = analyzeOpenGraphImage(html);
+export function analyzeSocialMeta(html: string): MetricCard {
+  const metaTags = extractMetaTags(html);
+  let score = 0;
+  const recommendations: Recommendation[] = [];
 
-  const cards = [ogBasicCard, ogImageCard];
-  const totalScore = cards.reduce((sum, card) => sum + card.score, 0);
-  const maxScore = cards.reduce((sum, card) => sum + card.maxScore, 0);
-  const perfectItems = generateOpenGraphPerfectItems(cards);
+  // ========================================
+  // FONDAMENTAUX DU CONTENU (65 points)
+  // ========================================
+
+  // Check og:title (20 points)
+  const ogTitle = metaTags['og:title'];
+  if (ogTitle && ogTitle.trim()) {
+    score += 20;
+  } else {
+    recommendations.push({
+      problem: "Open Graph title (`og:title`) is missing.",
+      solution: "Add the `<meta property=\"og:title\" content=\"Your Page Title\">` tag to your page's `<head>`.",
+      impact: 10
+    });
+  }
+
+  // Check og:description (15 points)
+  const ogDescription = metaTags['og:description'];
+  if (ogDescription && ogDescription.trim()) {
+    score += 15;
+  } else {
+    recommendations.push({
+      problem: "Open Graph description (`og:description`) is missing.",
+      solution: "Add the `<meta property=\"og:description\" content=\"A concise summary of your page.\">` tag.",
+      impact: 9
+    });
+  }
+
+  // Check og:image (20 points)
+  const ogImage = metaTags['og:image'];
+  if (ogImage && ogImage.trim()) {
+    score += 20;
+  } else {
+    recommendations.push({
+      problem: "Open Graph image (`og:image`) is missing.",
+      solution: "Add the `<meta property=\"og:image\" content=\"https://your-site.com/image.jpg\">` tag with a full, absolute URL.",
+      impact: 10
+    });
+  }
+
+  // Check og:url (10 points)
+  const ogUrl = metaTags['og:url'];
+  if (ogUrl && ogUrl.trim()) {
+    score += 10;
+  } else {
+    recommendations.push({
+      problem: "Open Graph URL (`og:url`) is missing.",
+      solution: "Add the `<meta property=\"og:url\" content=\"https://your-site.com/your-canonical-page\">` tag.",
+      impact: 7
+    });
+  }
+
+  // ========================================
+  // CONTEXTE & CLASSIFICATION (35 points)
+  // ========================================
+
+  // Check og:type (15 points)
+  const ogType = metaTags['og:type'];
+  if (ogType && ogType.trim()) {
+    score += 15;
+  } else {
+    recommendations.push({
+      problem: "Open Graph type (`og:type`) is missing.",
+      solution: "Add the `<meta property=\"og:type\" content=\"article\">` tag (or `website`, `product`).",
+      impact: 9
+    });
+  }
+
+  // Check twitter:card (10 points)
+  const twitterCard = metaTags['twitter:card'];
+  if (twitterCard && twitterCard.trim()) {
+    score += 10;
+  } else {
+    recommendations.push({
+      problem: "Twitter Card type (`twitter:card`) is missing.",
+      solution: "Add the `<meta name=\"twitter:card\" content=\"summary_large_image\">` tag for maximum visual impact.",
+      impact: 8
+    });
+  }
+
+  // Check og:image:alt (5 points) - only if og:image exists
+  const ogImageAlt = metaTags['og:image:alt'];
+  if (ogImage && ogImageAlt && ogImageAlt.trim()) {
+    score += 5;
+  } else if (ogImage && !ogImageAlt) {
+    recommendations.push({
+      problem: "`og:image` is present, but its descriptive text (`og:image:alt`) is missing.",
+      solution: "Add a companion `<meta property=\"og:image:alt\" content=\"A description of the image's content.\">` tag.",
+      impact: 6
+    });
+  }
+
+  // ========================================
+  // ATTRIBUTION & QUALITÉ TECHNIQUE (5 points total)
+  // ========================================
+
+  // New, clearer logic for attribution
+  const ATTRIBUTION_MAX_POINTS = 5;
+  let attributionScore = 0;
+
+  // Check og:site_name (1 point)
+  if (metaTags['og:site_name']?.trim()) {
+    attributionScore += 1;
+  } else {
+    recommendations.push({
+      problem: "Website name (`og:site_name`) is missing.",
+      solution: "Add the `<meta property=\"og:site_name\" content=\"Your Website Name\">` tag.",
+      impact: 4
+    });
+  }
+
+  // Check twitter:site (2 points)
+  if (metaTags['twitter:site']?.trim()) {
+    attributionScore += 2;
+  } else {
+    recommendations.push({
+      problem: "The site's main Twitter handle (`twitter:site`) is missing.",
+      solution: "Add the `<meta name=\"twitter:site\" content=\"@YourSiteHandle\">` tag.",
+      impact: 4
+    });
+  }
+
+  // Check twitter:creator (2 points)
+  if (metaTags['twitter:creator']?.trim()) {
+    attributionScore += 2;
+  } else {
+    recommendations.push({
+      problem: "The author's Twitter handle (`twitter:creator`) is missing for an article-type page.",
+      solution: "Add the `<meta name=\"twitter:creator\" content=\"@AuthorHandle\">` tag.",
+      impact: 5
+    });
+  }
+
+  score += Math.min(attributionScore, ATTRIBUTION_MAX_POINTS);
+
+  // Check image dimensions (bonus validation)
+  const ogImageWidth = metaTags['og:image:width'];
+  const ogImageHeight = metaTags['og:image:height'];
+  
+  if (ogImage && (!ogImageWidth || !ogImageHeight)) {
+    recommendations.push({
+      problem: "Image dimensions (`og:image:width` and `og:image:height`) are missing.",
+      solution: "Add `<meta property=\"og:image:width\" content=\"1200\">` and `<meta property=\"og:image:height\" content=\"630\">` tags.",
+      impact: 3
+    });
+  }
 
   return {
-    cards,
-    perfectItems,
-    totalScore,
-    maxScore
+    id: 'social-meta-analysis',
+    name: 'Social Meta Tags (Open Graph & Twitter)',
+    score,
+    maxScore: 100,
+    status: getPerformanceStatus(score, 100),
+    explanation: "This analysis evaluates the quality of your Open Graph and Twitter Card tags. These meta tags are crucial for social media sharing and provide high-quality, explicit metadata for AI understanding. They serve as a 'summary for robots' that corroborates and complements your JSON-LD and page content.",
+    recommendations,
+    successMessage: "Excellent! Your social meta tags provide comprehensive metadata for AI understanding and optimal social sharing.",
+    rawData: {
+      metaTags,
+      scoreBreakdown: {
+        fundamentals: score <= 65 ? score : 65,
+        context: score > 65 ? score - 65 : 0
+      }
+    }
   };
 }
-
-// Export individual analyzers for backwards compatibility
-export {
-  analyzeOpenGraphBasic,
-  analyzeOpenGraphImage
-};

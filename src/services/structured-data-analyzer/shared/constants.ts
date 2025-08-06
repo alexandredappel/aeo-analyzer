@@ -14,7 +14,7 @@ export const SECTION_CONFIG: SectionConfig = {
   emoji: '📋',
   description: 'Does your content have proper schema markup for AI understanding?',
   weightPercentage: 25,
-  maxScore: 170  // 110 (JSON-LD: 30+50+20+10) + 35 (Meta) + 25 (Social) = 170
+  maxScore: 100  // New weighted scoring system: 80% JSON-LD + 20% Social Meta
 };
 
 /**

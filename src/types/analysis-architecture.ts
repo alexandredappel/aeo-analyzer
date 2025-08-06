@@ -18,6 +18,8 @@ export interface Recommendation {
   problem: string;
   /** Solution recommandée pour résoudre le problème */
   solution: string;
+  /** Score d'impact de 1 à 10 indiquant la sévérité du problème */
+  impact?: number;
 }
 
 /**

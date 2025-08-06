@@ -52,8 +52,7 @@ export {
   analyzeTitleTag,
   analyzeMetaDescription,
   analyzeTechnicalMeta,
-  analyzeOpenGraphBasic,
-  analyzeOpenGraphImage
+  analyzeSocialMeta
 } from './structured-data-analyzer';
 
 export type {

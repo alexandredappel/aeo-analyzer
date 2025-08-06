@@ -35,7 +35,7 @@ export function analyzeStructuredData(html: string, url: string): StructuredData
     // Run specialized analyses
     const jsonLdResult = analyzeJsonLD(html);
     const metaTagsResult = analyzeMetaTags(html);
-    const socialMetaResult = analyzeSocialMeta(html);
+    const socialMetaCard = analyzeSocialMeta(html);
 
     // Build drawers (DrawerSubSection)
     const jsonldDrawer: DrawerSubSection = {
@@ -63,16 +63,23 @@ export function analyzeStructuredData(html: string, url: string): StructuredData
     const socialMetaDrawer: DrawerSubSection = {
       id: 'social-meta-analysis',
       name: 'Social Meta Analysis',
-      description: 'Open Graph tags for social sharing',
-      totalScore: socialMetaResult.totalScore,
-      maxScore: socialMetaResult.maxScore,
-      status: getPerformanceStatus(socialMetaResult.totalScore, socialMetaResult.maxScore),
-      cards: socialMetaResult.cards,
-      perfectItems: socialMetaResult.perfectItems
+      description: 'Open Graph & Twitter Card tags for social sharing.',
+      totalScore: socialMetaCard.score,
+      maxScore: socialMetaCard.maxScore,
+      status: getPerformanceStatus(socialMetaCard.score, socialMetaCard.maxScore),
+      cards: [socialMetaCard]
     };
 
-    // Total section score
-    const totalScore = jsonldDrawer.totalScore + metaTagsDrawer.totalScore + socialMetaDrawer.totalScore;
+    // NEW WEIGHTED CALCULATION
+    const jsonLdContribution = (jsonldDrawer.maxScore > 0) 
+      ? (jsonldDrawer.totalScore / jsonldDrawer.maxScore) * 80 
+      : 0;
+
+    const socialMetaContribution = (socialMetaDrawer.maxScore > 0) 
+      ? (socialMetaDrawer.totalScore / socialMetaDrawer.maxScore) * 20 
+      : 0;
+
+    const totalScore = Math.round(jsonLdContribution + socialMetaContribution);
 
     // Build main section
     const section: MainSection = {
@@ -222,9 +229,8 @@ export {
 } from './meta-tags-analysis';
 
 export {
-  // Social meta analyzers
-  analyzeOpenGraphBasic,
-  analyzeOpenGraphImage
+  // Social meta analyzer
+  analyzeSocialMeta
 } from './social-meta-analysis';
 
 // Re-export shared utilities
