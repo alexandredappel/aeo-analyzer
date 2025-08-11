@@ -401,7 +401,7 @@ export async function POST(request: Request): Promise<Response> {
           
           // Enhanced logging
           responseLogger.success(`LLM formatting analysis completed! Score: ${transformedLLMFormatting.totalScore}/${transformedLLMFormatting.maxScore}`);
-          responseLogger.info(`🤖 LLM Formatting Details: Headings=${llmFormattingResult.rawData?.headingStructure?.totalHeadings || 0}, SemanticRatio=${Math.round((llmFormattingResult.rawData?.semanticHTML5?.semanticRatio || 0) * 100)}%, Links=${llmFormattingResult.rawData?.linkQuality?.totalLinks || 0}, CleanMarkup=${llmFormattingResult.rawData?.technicalStructure?.cleanMarkup || 0}/8, Drawers=${transformedLLMFormatting.drawers.length}`);
+          responseLogger.info(`🤖 LLM Formatting Details: ContentHierarchy=${llmFormattingResult.rawData?.contentHierarchy?.totalScore || 0}/${llmFormattingResult.rawData?.contentHierarchy?.maxScore || 50}, LayoutRoles=${llmFormattingResult.rawData?.layoutAndStructuralRoles?.totalScore || 0}/${llmFormattingResult.rawData?.layoutAndStructuralRoles?.maxScore || 30}, CTAContextClarity=${llmFormattingResult.rawData?.ctaContextClarity?.totalScore || 0}/${llmFormattingResult.rawData?.ctaContextClarity?.maxScore || 20}, Drawers=${transformedLLMFormatting.drawers.length}`);
           
           performanceTimer.endPhase('llmFormatting');
           
@@ -428,7 +428,7 @@ export async function POST(request: Request): Promise<Response> {
         
         // Enhanced logging
         responseLogger.success(`Accessibility analysis completed! Score: ${transformedAccessibility.totalScore}/${transformedAccessibility.maxScore}`);
-        responseLogger.info(`♿ Accessibility Details: ContentRatio=${Math.round((accessibilityResult.rawData?.criticalDOM?.contentRatio || 0) * 100)}%, StaticNav=${accessibilityResult.rawData?.criticalDOM?.navigationAccess || 0}, PageSpeed=${accessibilityResult.rawData?.performance?.pageSpeedScore || 'N/A'}, CoreWebVitals=${accessibilityResult.rawData?.performance?.coreWebVitals ? 'Available' : 'Unavailable'}, AltText=${Math.round(accessibilityResult.rawData?.imagesAccessibility?.altTextCoverage || 0)}%, Images=${accessibilityResult.rawData?.imagesAccessibility?.totalImages || 0}, Drawers=${transformedAccessibility.drawers.length}`);
+        responseLogger.info(`♿ Accessibility Details: ContentScore=${accessibilityResult.rawData?.contentAccessibility?.totalScore || 0}/${accessibilityResult.rawData?.contentAccessibility?.maxScore || 0}, PageSpeed=${accessibilityResult.rawData?.technicalAccessibility?.performanceScore || 'N/A'}, CoreWebVitals=${accessibilityResult.rawData?.technicalAccessibility?.coreWebVitals ? 'Available' : 'Unavailable'}, Navigation=${accessibilityResult.rawData?.navigationalAccessibility?.navElementsCount || 0} nav elements, Drawers=${transformedAccessibility.drawers.length}`);
         
         performanceTimer.endPhase('accessibility');
         

@@ -3,7 +3,7 @@
  * 
  * Analyzes paragraph structure and content density
  * Focuses on content organization and scannability
- * Weight: 35 points (35% of total readability score)
+ * Weight: 40 points (40% of total readability score)
  * 
  * Architecture: Two metric cards for paragraph structure and content density
  */

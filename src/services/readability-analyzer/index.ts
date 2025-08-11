@@ -64,9 +64,9 @@ export async function analyzeReadability(html: string, url?: string): Promise<Re
     };
 
     const linguisticPrecisionDrawer: DrawerSubSection = {
-      id: 'linguistic-precision',
-      name: 'Linguistic Precision',
-      description: 'Analyzes sentence structure and the clarity of interactive elements',
+      id: 'sentence-structure',
+      name: 'Sentence Structure',
+      description: 'Analyzes the length and variety of sentences to ensure a natural reading rhythm.',
       totalScore: linguisticPrecisionResult.totalScore,
       maxScore: linguisticPrecisionResult.maxScore,
       status: calculateStatus(linguisticPrecisionResult.totalScore, linguisticPrecisionResult.maxScore),

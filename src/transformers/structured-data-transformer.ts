@@ -177,7 +177,10 @@ export class StructuredDataTransformer {
       status: this.calculateStatus(card.score, card.maxScore),
       explanation: card.explanation,
       recommendations: unifiedRecommendations,
-      successMessage: card.successMessage || "Everything looks good for this metric!",
+      // CONDITIONAL SUCCESS MESSAGE LOGIC
+      successMessage: (unifiedRecommendations.length === 0) 
+        ? card.successMessage || "Everything looks good for this metric!" 
+        : "",
       rawData: card.rawData
     };
   }

@@ -230,8 +230,10 @@ export class ReadabilityTransformer {
       // Remove legacy fields to ensure clean output
       problems: undefined,
       solutions: undefined,
-      // Ensure all required fields are present
-      successMessage: card.successMessage || 'Analysis completed successfully.'
+      // CONDITIONAL SUCCESS MESSAGE LOGIC
+      successMessage: (unifiedRecommendations.length === 0) 
+        ? card.successMessage || 'Analysis completed successfully.' 
+        : ""
     };
   }
 

@@ -18,6 +18,8 @@ export interface Recommendation {
   problem: string;
   /** Solution recommandée pour résoudre le problème */
   solution: string;
+  /** Explication détaillée de l'impact du problème sur l'IA et le SEO */
+  explanation?: string;
   /** Score d'impact de 1 à 10 indiquant la sévérité du problème */
   impact?: number;
 }

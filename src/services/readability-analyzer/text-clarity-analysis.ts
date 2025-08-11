@@ -3,7 +3,7 @@
  * 
  * Analyzes text complexity and semantic precision for LLM optimization
  * Focuses on Flesch Reading Ease score and passive voice detection
- * Weight: 40 points (40% of total readability score)
+ * Weight: 45 points (45% of total readability score)
  * 
  * Architecture: Two separate metric cards with dynamic, data-rich recommendations
  */
@@ -106,13 +106,13 @@ function calculateFleschScore(words: string[], sentences: string[]): number {
  */
 function calculateFleschScorePoints(fleschScore: number): number {
   if (fleschScore >= 40 && fleschScore <= 70) {
-    return 20; // Optimal range - full points
+    return 25; // Optimal range - full points
   } else if (fleschScore >= 30 && fleschScore <= 80) {
-    return 15; // Good range
+    return 19; // Good range
   } else if (fleschScore >= 20 && fleschScore <= 90) {
-    return 10; // Fair range
+    return 13; // Fair range
   } else {
-    return 5; // Poor range
+    return 6; // Poor range
   }
 }
 
@@ -242,7 +242,7 @@ function createFleschScoreCard(text: string): MetricCard {
       id: 'flesch-score-analysis',
       name: 'Flesch Reading Ease Score',
       score: 0,
-      maxScore: 20,
+      maxScore: 25,
       status: 'error',
       explanation: 'Measures content readability using the Flesch Reading Ease formula. Optimal scores (40-70) ensure content is accessible to both human readers and AI systems for better comprehension and engagement.',
       recommendations: [{
@@ -284,8 +284,8 @@ function createFleschScoreCard(text: string): MetricCard {
     id: 'flesch-score-analysis',
     name: 'Flesch Reading Ease Score',
     score: fleschPoints,
-    maxScore: 20,
-    status: calculateStatus(fleschPoints, 20),
+    maxScore: 25,
+    status: calculateStatus(fleschPoints, 25),
     explanation: 'Measures content readability using the Flesch Reading Ease formula. Optimal scores (40-70) ensure content is accessible to both human readers and AI systems for better comprehension and engagement.',
     recommendations,
     successMessage: generateFleschSuccessMessage(fleschScore),
@@ -381,7 +381,7 @@ export async function analyzeTextClarity(text: string): Promise<TextClarityResul
         id: 'text-clarity-error',
         name: 'Text Clarity',
         score: 0,
-        maxScore: 40,
+        maxScore: 45,
         status: 'error',
         explanation: 'This analysis evaluates your writing\'s syntactic complexity and semantic precision to ensure content is direct, unambiguous, and factual for optimal AI comprehension.',
         recommendations: [{
@@ -401,7 +401,7 @@ export async function analyzeTextClarity(text: string): Promise<TextClarityResul
       return {
         cards: [errorCard],
         totalScore: 0,
-        maxScore: 40,
+        maxScore: 45,
         rawData: {
           fleschScore: 0,
           passiveVoiceRatio: 0,
@@ -419,7 +419,7 @@ export async function analyzeTextClarity(text: string): Promise<TextClarityResul
     
     // Calculate combined scores
     const totalScore = fleschCard.score + passiveVoiceCard.score;
-    const maxScore = 40; // 20 + 20
+    const maxScore = 45; // 25 + 20
     
     return {
       cards: [fleschCard, passiveVoiceCard],
@@ -442,7 +442,7 @@ export async function analyzeTextClarity(text: string): Promise<TextClarityResul
       id: 'text-clarity-error',
       name: 'Text Clarity',
       score: 0,
-      maxScore: 40,
+      maxScore: 45,
       status: 'error',
       explanation: 'This analysis evaluates your writing\'s syntactic complexity and semantic precision to ensure content is direct, unambiguous, and factual for optimal AI comprehension.',
       recommendations: [{
@@ -462,7 +462,7 @@ export async function analyzeTextClarity(text: string): Promise<TextClarityResul
     return {
       cards: [errorCard],
       totalScore: 0,
-      maxScore: 40,
+      maxScore: 45,
       rawData: {
         fleschScore: 0,
         passiveVoiceRatio: 0,

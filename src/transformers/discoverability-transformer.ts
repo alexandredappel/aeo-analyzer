@@ -15,22 +15,7 @@ import {
 } from '@/types/analysis-architecture';
 import { DiscoverabilityAnalysisResult } from '@/services/discoverability-analyzer';
 
-// Legacy format support (for backward compatibility)
-interface LegacyDiscoverabilityResult {
-  category: string;
-  score: number;
-  maxScore: number;
-  breakdown: {
-    https: { score: number; status: string; message: string };
-    httpStatus: { score: number; status: string; message: string };
-    robotsAiBots: { score: number; status: string; message: string };
-    sitemap: { score: number; status: string; message: string };
-  };
-  recommendations: string[];
-  error?: string;
-}
-
-type DiscoverabilityInput = DiscoverabilityAnalysisResult | LegacyDiscoverabilityResult;
+type DiscoverabilityInput = DiscoverabilityAnalysisResult;
 
 export class DiscoverabilityTransformer {
   
@@ -39,22 +24,10 @@ export class DiscoverabilityTransformer {
    */
   public transform(rawResult: DiscoverabilityInput): MainSection {
     try {
-      // Check if it's the new format
-      if (this.isNewFormat(rawResult)) {
-        return this.transformNewFormat(rawResult as DiscoverabilityAnalysisResult);
-      } else {
-        return this.transformLegacyFormat(rawResult as LegacyDiscoverabilityResult);
-      }
+      return this.transformNewFormat(rawResult);
     } catch (error) {
       return this.createErrorSection((error as Error).message);
     }
-  }
-
-  /**
-   * Determines if the input is the new DiscoverabilityAnalysisResult format
-   */
-  private isNewFormat(result: DiscoverabilityInput): boolean {
-    return 'section' in result && 'globalPenalties' in result;
   }
 
   /**
@@ -79,70 +52,19 @@ export class DiscoverabilityTransformer {
     return translatedSection;
   }
 
-  /**
-   * Transforms legacy format into new UI structure
-   */
-  private transformLegacyFormat(result: LegacyDiscoverabilityResult): MainSection {
-    const foundationCards = [
-      this.createHTTPSCard(result.breakdown.https),
-      this.createHTTPStatusCard(result.breakdown.httpStatus)
-    ];
 
-    const aiAccessCards = [
-      this.createAIBotsCard(result.breakdown.robotsAiBots),
-      this.createSitemapCard(result.breakdown.sitemap)
-    ];
-
-    const foundationDrawer: DrawerSubSection = {
-      id: 'foundation',
-      name: 'Technical Foundation',
-      description: 'HTTPS protocol and basic accessibility',
-      totalScore: foundationCards.reduce((sum, card) => sum + card.score, 0),
-      maxScore: 50,
-      status: this.calculateStatus(
-        foundationCards.reduce((sum, card) => sum + card.score, 0), 
-        50
-      ),
-      cards: foundationCards
-    };
-
-    const aiAccessDrawer: DrawerSubSection = {
-      id: 'ai-access',
-      name: 'AI Access',
-      description: 'Accessibility for AI engines and crawlers',
-      totalScore: aiAccessCards.reduce((sum, card) => sum + card.score, 0),
-      maxScore: 50,
-      status: this.calculateStatus(
-        aiAccessCards.reduce((sum, card) => sum + card.score, 0), 
-        50
-      ),
-      cards: aiAccessCards
-    };
-
-    return {
-      id: 'discoverability',
-      name: 'Discoverability',
-      emoji: '🔍',
-      description: 'Is your website discoverable by AI search engines?',
-      weightPercentage: 20,
-      totalScore: result.score,
-      maxScore: result.maxScore,
-      status: this.calculateStatus(result.score, result.maxScore),
-      drawers: [foundationDrawer, aiAccessDrawer]
-    };
-  }
 
   /**
    * Translates a drawer from French to English
    */
   private translateDrawer(drawer: DrawerSubSection): DrawerSubSection {
-    const translatedCards = drawer.cards.map(card => this.translateCard(card));
+    const enhancedCards = drawer.cards.map(card => this.enhanceCard(card));
     
     return {
       ...drawer,
       name: this.translateDrawerName(drawer.id),
       description: this.translateDrawerDescription(drawer.id),
-      cards: translatedCards,
+      cards: enhancedCards,
       status: this.calculateStatus(drawer.totalScore, drawer.maxScore)
     };
   }
@@ -154,6 +76,7 @@ export class DiscoverabilityTransformer {
     const translations: Record<string, string> = {
       'foundation': 'Technical Foundation',
       'ai-access': 'AI Access',
+      'llm-instructions': 'LLM Instructions',
       'fondations': 'Technical Foundation', // French fallback
       'accès-ia': 'AI Access' // French fallback
     };
@@ -166,24 +89,32 @@ export class DiscoverabilityTransformer {
    */
   private translateDrawerDescription(drawerId: string): string {
     const descriptions: Record<string, string> = {
-      'foundation': 'HTTPS protocol and basic accessibility',
-      'ai-access': 'Accessibility for AI engines and crawlers'
+      'foundation': 'HTTPS protocol and HTTP status',
+      'ai-access': 'Accessibility for AI engines and crawlers',
+      'llm-instructions': 'Checks for an llm.txt file for advanced AI directives.'
     };
     
     return descriptions[drawerId] || 'Analysis subsection';
   }
 
   /**
-   * Translates a metric card from French to English
+   * Enhances a metric card for UI display
    */
-  private translateCard(card: MetricCard): MetricCard {
+  private enhanceCard(card: MetricCard): MetricCard {
+    // This function assumes the card is already in the new format, 
+    // as the entire Discoverability module has been refactored.
     return {
       ...card,
       name: this.translateCardName(card.id),
       explanation: this.translateExplanation(card.id),
-      problems: this.translateProblems(card.id, card.problems || []),
-      solutions: this.translateSolutions(card.id, card.solutions || []),
-      status: this.calculateStatus(card.score, card.maxScore)
+      status: this.calculateStatus(card.score, card.maxScore),
+      recommendations: card.recommendations || [], // Ensure recommendations is always an array
+      successMessage: (!card.recommendations || card.recommendations.length === 0) 
+        ? (card.successMessage || "Excellent! Everything looks good for this metric.")
+        : (card.successMessage || "Analysis completed successfully."),
+      // Ensure legacy fields are NOT present in the final output
+      problems: undefined,
+      solutions: undefined,
     };
   }
 
@@ -195,7 +126,8 @@ export class DiscoverabilityTransformer {
       'https-protocol': 'HTTPS Protocol',
       'http-status': 'HTTP Status',
       'ai-bots-access': 'AI Bots Access',
-      'sitemap-quality': 'Sitemap Quality'
+      'sitemap-quality': 'Sitemap Quality',
+      'llm-txt-analysis': 'LLM Instructions File'
     };
     
     return translations[cardId] || cardId;
@@ -209,160 +141,16 @@ export class DiscoverabilityTransformer {
       'https-protocol': 'HTTPS protocol encrypts data between browser and server, improving security and trust. Google and AI engines prioritize HTTPS sites in their rankings.',
       'http-status': 'HTTP status code indicates if your page is accessible to crawlers. A 200 (success) status is optimal for indexing by search engines and AI.',
       'ai-bots-access': 'AI bot access to your content is crucial for AEO. Robots.txt blocking these bots drastically reduces your visibility in AI responses and can penalize your entire AEO score.',
-      'sitemap-quality': 'XML sitemap helps search engines and AI discover and understand your site structure. It accelerates indexing and improves content coverage.'
+      'sitemap-quality': 'XML sitemap helps search engines and AI discover and understand your site structure. It accelerates indexing and improves content coverage.',
+      'llm-txt-analysis': 'This analysis checks for the presence of an llm.txt or llm-full.txt file, which is an emerging practice for providing AI-specific instructions to advanced crawlers. This is purely informational and does not affect your score.'
     };
     
     return explanations[cardId] || 'Analysis metric for website optimization.';
   }
 
-  /**
-   * Translates problems array to English
-   */
-  private translateProblems(cardId: string, problems: string[]): string[] {
-    if (problems.length === 0) return [];
 
-    const problemTranslations: Record<string, string[]> = {
-      'https-protocol': [
-        'Your site uses HTTP instead of HTTPS',
-        'Data is not encrypted in transit',
-        'Negative impact on SEO rankings',
-        'Loss of trust from users and AI crawlers'
-      ],
-      'http-status': [
-        'Page is not accessible',
-        'Connection error or server issue',
-        'AI crawlers cannot analyze the content'
-      ],
-      'ai-bots-access': [
-        'Robots.txt file not found',
-        'AI bots may have unpredictable access',
-        'Risk of default blocking by some crawlers',
-        'Some AI bots are blocked by robots.txt',
-        'Reduced visibility in AI search results'
-      ],
-      'sitemap-quality': [
-        'XML sitemap file not found',
-        'Crawlers cannot discover all pages',
-        'Slower and less complete indexing'
-      ]
-    };
 
-    return problemTranslations[cardId] || problems;
-  }
 
-  /**
-   * Translates solutions array to English
-   */
-  private translateSolutions(cardId: string, solutions: string[]): string[] {
-    if (solutions.length === 0) return [];
-
-    const solutionTranslations: Record<string, string[]> = {
-      'https-protocol': [
-        'Install a valid SSL/TLS certificate',
-        'Configure automatic HTTP → HTTPS redirection',
-        'Update all internal links to HTTPS',
-        'Add HSTS (HTTP Strict Transport Security)'
-      ],
-      'http-status': [
-        'Verify web server is running correctly',
-        'Check DNS configuration',
-        'Test accessibility from different networks',
-        'Fix server errors and restore missing content'
-      ],
-      'ai-bots-access': [
-        'Create robots.txt file at site root',
-        'Explicitly allow important AI bots',
-        'Test accessibility with Google Search Console',
-        'Modify robots.txt to allow AI bots',
-        'Use \'Allow: /\' for specific AI User-agents',
-        'Avoid \'Disallow: /\' in global rules'
-      ],
-      'sitemap-quality': [
-        'Create XML sitemap at site root',
-        'Auto-generate sitemap with your CMS',
-        'Submit sitemap via Google Search Console',
-        'Add sitemap reference in robots.txt',
-        'Maintain sitemap automatically',
-        'Include all important pages'
-      ]
-    };
-
-    return solutionTranslations[cardId] || solutions;
-  }
-
-  /**
-   * Creates HTTPS card from legacy format
-   */
-  private createHTTPSCard(httpsData: any): MetricCard {
-    const isHttps = httpsData.score > 0;
-    
-    return {
-      id: 'https-protocol',
-      name: 'HTTPS Protocol',
-      score: httpsData.score,
-      maxScore: 25,
-      status: this.calculateStatus(httpsData.score, 25),
-      explanation: this.translateExplanation('https-protocol'),
-      problems: isHttps ? [] : this.translateProblems('https-protocol', []),
-      solutions: this.translateSolutions('https-protocol', []),
-      successMessage: "Great! Your site uses HTTPS protocol for secure connections.",
-      rawData: { isSecure: isHttps }
-    };
-  }
-
-  /**
-   * Creates HTTP Status card from legacy format
-   */
-  private createHTTPStatusCard(statusData: any): MetricCard {
-    return {
-      id: 'http-status',
-      name: 'HTTP Status',
-      score: statusData.score,
-      maxScore: 25,
-      status: this.calculateStatus(statusData.score, 25),
-      explanation: this.translateExplanation('http-status'),
-      problems: statusData.score < 25 ? this.translateProblems('http-status', []) : [],
-      solutions: this.translateSolutions('http-status', []),
-      successMessage: "Perfect! Your site returns a valid HTTP 200 status code.",
-      rawData: { message: statusData.message }
-    };
-  }
-
-  /**
-   * Creates AI Bots card from legacy format
-   */
-  private createAIBotsCard(robotsData: any): MetricCard {
-    return {
-      id: 'ai-bots-access',
-      name: 'AI Bots Access',
-      score: robotsData.score,
-      maxScore: 30,
-      status: this.calculateStatus(robotsData.score, 30),
-      explanation: this.translateExplanation('ai-bots-access'),
-      problems: robotsData.score < 30 ? this.translateProblems('ai-bots-access', []) : [],
-      solutions: this.translateSolutions('ai-bots-access', []),
-      successMessage: "Excellent! All AI bots can access your content for better AEO.",
-      rawData: { message: robotsData.message }
-    };
-  }
-
-  /**
-   * Creates Sitemap card from legacy format
-   */
-  private createSitemapCard(sitemapData: any): MetricCard {
-    return {
-      id: 'sitemap-quality',
-      name: 'Sitemap Quality',
-      score: sitemapData.score,
-      maxScore: 20,
-      status: this.calculateStatus(sitemapData.score, 20),
-      explanation: this.translateExplanation('sitemap-quality'),
-      problems: sitemapData.score === 0 ? this.translateProblems('sitemap-quality', []) : [],
-      solutions: this.translateSolutions('sitemap-quality', []),
-      successMessage: "Great! Your sitemap is properly configured and accessible.",
-      rawData: { message: sitemapData.message }
-    };
-  }
 
   /**
    * Calculates performance status based on score percentage

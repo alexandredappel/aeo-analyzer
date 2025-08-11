@@ -34,7 +34,7 @@ export function analyzeStructuredData(html: string, url: string): StructuredData
 
     // Run specialized analyses
     const jsonLdResult = analyzeJsonLD(html);
-    const metaTagsResult = analyzeMetaTags(html);
+    const metaTagsCard = analyzeMetaTags(html);
     const socialMetaCard = analyzeSocialMeta(html);
 
     // Build drawers (DrawerSubSection)
@@ -52,12 +52,12 @@ export function analyzeStructuredData(html: string, url: string): StructuredData
     const metaTagsDrawer: DrawerSubSection = {
       id: 'meta-tags-analysis',
       name: 'Meta Tags Analysis',
-      description: 'Essential metadata for search engines',
-      totalScore: metaTagsResult.totalScore,
-      maxScore: metaTagsResult.maxScore,
-      status: getPerformanceStatus(metaTagsResult.totalScore, metaTagsResult.maxScore),
-      cards: metaTagsResult.cards,
-      perfectItems: metaTagsResult.perfectItems
+      description: 'Essential metadata for search engines and AI understanding',
+      totalScore: metaTagsCard.score,
+      maxScore: metaTagsCard.maxScore,
+      status: getPerformanceStatus(metaTagsCard.score, metaTagsCard.maxScore),
+      cards: [metaTagsCard],
+      perfectItems: []
     };
 
     const socialMetaDrawer: DrawerSubSection = {
@@ -70,16 +70,20 @@ export function analyzeStructuredData(html: string, url: string): StructuredData
       cards: [socialMetaCard]
     };
 
-    // NEW WEIGHTED CALCULATION
+    // NEW 70/15/15 WEIGHTED CALCULATION
     const jsonLdContribution = (jsonldDrawer.maxScore > 0) 
-      ? (jsonldDrawer.totalScore / jsonldDrawer.maxScore) * 80 
+      ? (jsonldDrawer.totalScore / jsonldDrawer.maxScore) * 70 
+      : 0;
+
+    const metaTagsContribution = (metaTagsDrawer.maxScore > 0)
+      ? (metaTagsDrawer.totalScore / metaTagsDrawer.maxScore) * 15
       : 0;
 
     const socialMetaContribution = (socialMetaDrawer.maxScore > 0) 
-      ? (socialMetaDrawer.totalScore / socialMetaDrawer.maxScore) * 20 
+      ? (socialMetaDrawer.totalScore / socialMetaDrawer.maxScore) * 15 
       : 0;
 
-    const totalScore = Math.round(jsonLdContribution + socialMetaContribution);
+    const totalScore = Math.round(jsonLdContribution + metaTagsContribution + socialMetaContribution);
 
     // Build main section
     const section: MainSection = {
@@ -222,10 +226,8 @@ export {
 } from './json-ld-analysis';
 
 export {
-  // Meta tags analyzers
-  analyzeTitleTag,
-  analyzeMetaDescription,
-  analyzeTechnicalMeta
+  // Meta tags analyzer
+  analyzeMetaTags
 } from './meta-tags-analysis';
 
 export {
