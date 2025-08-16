@@ -1,7 +1,48 @@
 import type { NextRequest } from 'next/server';
-import puppeteer from 'puppeteer';
+import chromium from '@sparticuz/chromium';
+import puppeteer from 'puppeteer-core';
+import fs from 'node:fs';
+import { access } from 'node:fs/promises';
 
 export const runtime = 'nodejs';
+export const maxDuration = 60;
+async function resolveExecutablePath(): Promise<string> {
+  // Highest priority: explicit env var
+  if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+    return process.env.PUPPETEER_EXECUTABLE_PATH;
+  }
+
+  // Prefer system Chrome in local dev (macOS/Windows), since @sparticuz/chromium is built for linux serverless
+  if (!process.env.VERCEL) {
+    const candidates: string[] = [];
+    if (process.platform === 'darwin') {
+      candidates.push(
+        '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+        '/Applications/Chromium.app/Contents/MacOS/Chromium',
+        '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary'
+      );
+    } else if (process.platform === 'win32') {
+      const programFiles = process.env['PROGRAMFILES'] || 'C:/Program Files';
+      const programFilesX86 = process.env['PROGRAMFILES(X86)'] || 'C:/Program Files (x86)';
+      candidates.push(
+        `${programFiles}/Google/Chrome/Application/chrome.exe`,
+        `${programFilesX86}/Google/Chrome/Application/chrome.exe`
+      );
+    } else {
+      candidates.push('/usr/bin/google-chrome', '/usr/bin/chromium-browser', '/usr/bin/chromium');
+    }
+
+    for (const candidate of candidates) {
+      try {
+        await access(candidate, fs.constants.X_OK);
+        return candidate;
+      } catch {}
+    }
+  }
+
+  // Vercel/Linux serverless compatible path
+  return chromium.executablePath();
+}
 
 interface ScoreContribution {
   score: number;
@@ -200,12 +241,15 @@ export async function POST(request: NextRequest): Promise<Response> {
 
     const html = buildPlainHtmlReport(payload);
 
+    // Determine executable path compatible with Vercel serverless
+    const chromiumExecutablePath = await resolveExecutablePath();
     const browser = await puppeteer.launch({
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      args: chromium.args,
+      executablePath: chromiumExecutablePath,
       headless: true
     });
     const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: 'networkidle0' });
+    await page.setContent(html, { waitUntil: 'domcontentloaded' });
     const pdf = await page.pdf({
       format: 'A4',
       printBackground: true,
@@ -239,6 +283,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       }
     });
   } catch (error) {
+    console.error('Export PDF error:', error);
     return Response.json({ error: (error as Error).message }, { status: 500 });
   }
 }
