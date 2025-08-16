@@ -37,11 +37,13 @@ const TEXT_CLARITY_KNOWLEDGE_BASE = {
   fleschTooComplex: {
     problem: "The text's complexity is too high with a Flesch score of **[fleschScore]**. The target is 40-70.",
     solution: "Shorten sentences and replace multi-syllable words with simpler alternatives to increase your score into the 40-70 range.",
+    explanation: "A very low Flesch score indicates high syntactic complexity, making it harder for AIs to accurately parse sentences and extract factual relationships.",
     impact: 8
   },
   fleschTooSimple: {
     problem: "The text may be overly simplistic with a Flesch score of **[fleschScore]**. The target is 40-70.",
     solution: "Consider introducing more varied sentence structures to add nuance, but only if it matches your audience's needs.",
+    explanation: "While easy to parse, overly simple text can sometimes lack the informational depth and authority AIs look for in high-quality sources.",
     impact: 4
   },
   
@@ -49,11 +51,13 @@ const TEXT_CLARITY_KNOWLEDGE_BASE = {
   passiveVoiceHigh: {
     problem: "Passive voice usage is high at **[passiveRatio]%**. It's unclear who is performing key actions.",
     solution: "Rephrase passive sentences to the active voice. Identify the 'doer' of the action and make them the subject of the sentence.",
+    explanation: "A high use of passive voice makes the content confusing for AIs. It's unclear who is performing key actions, which is a major problem for AI fact-extraction.",
     impact: 9
   },
   passiveVoiceElevated: {
     problem: "Passive voice usage is slightly elevated at **[passiveRatio]%**. This introduces ambiguity for AIs.",
     solution: "Review sentences like 'The report was written' and rephrase them to 'Our analyst wrote the report' to improve clarity.",
+    explanation: "Indirect language introduces ambiguity for AIs, increasing the risk of misinterpretation of who did what in your content.",
     impact: 6
   }
 };
@@ -270,12 +274,14 @@ function createFleschScoreCard(text: string): MetricCard {
     recommendations.push({
       problem: replaceDynamicPlaceholders(TEXT_CLARITY_KNOWLEDGE_BASE.fleschTooComplex.problem, { fleschScore }),
       solution: TEXT_CLARITY_KNOWLEDGE_BASE.fleschTooComplex.solution,
+      explanation: TEXT_CLARITY_KNOWLEDGE_BASE.fleschTooComplex.explanation,
       impact: TEXT_CLARITY_KNOWLEDGE_BASE.fleschTooComplex.impact
     });
   } else if (fleschScore > 70) {
     recommendations.push({
       problem: replaceDynamicPlaceholders(TEXT_CLARITY_KNOWLEDGE_BASE.fleschTooSimple.problem, { fleschScore }),
       solution: TEXT_CLARITY_KNOWLEDGE_BASE.fleschTooSimple.solution,
+      explanation: TEXT_CLARITY_KNOWLEDGE_BASE.fleschTooSimple.explanation,
       impact: TEXT_CLARITY_KNOWLEDGE_BASE.fleschTooSimple.impact
     });
   }
@@ -337,12 +343,14 @@ async function createPassiveVoiceCard(text: string): Promise<MetricCard> {
     recommendations.push({
       problem: replaceDynamicPlaceholders(TEXT_CLARITY_KNOWLEDGE_BASE.passiveVoiceHigh.problem, { passiveRatio: passiveVoiceData.ratio }),
       solution: TEXT_CLARITY_KNOWLEDGE_BASE.passiveVoiceHigh.solution,
+      explanation: TEXT_CLARITY_KNOWLEDGE_BASE.passiveVoiceHigh.explanation,
       impact: TEXT_CLARITY_KNOWLEDGE_BASE.passiveVoiceHigh.impact
     });
   } else if (passiveVoiceData.ratio > 10) {
     recommendations.push({
       problem: replaceDynamicPlaceholders(TEXT_CLARITY_KNOWLEDGE_BASE.passiveVoiceElevated.problem, { passiveRatio: passiveVoiceData.ratio }),
       solution: TEXT_CLARITY_KNOWLEDGE_BASE.passiveVoiceElevated.solution,
+      explanation: TEXT_CLARITY_KNOWLEDGE_BASE.passiveVoiceElevated.explanation,
       impact: TEXT_CLARITY_KNOWLEDGE_BASE.passiveVoiceElevated.impact
     });
   }

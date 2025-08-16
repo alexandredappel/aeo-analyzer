@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MainSectionComponent } from '@/components/ui/analysis/MainSectionComponent';
+import { MainSectionAnalysis } from '@/components/ui/analysis/MainSectionAnalysis';
 import { MainSection } from '@/types/analysis-architecture';
 import { AEOScoreDisplay } from '@/components/ui/AEOScoreDisplay';
 
@@ -75,6 +75,7 @@ interface CollectionResultsProps {
   analysisResults: AnalysisResults | null;
   isLoading: boolean;
   isAnalysisCompleted: boolean;
+  onRunAgain?: () => void;
 }
 
 interface ScoreContribution {
@@ -275,9 +276,56 @@ function BreakdownItem({ icon, label, score, maxScore, details }: BreakdownItemP
 
 
 
-export function CollectionResults({ data, analysisResults, isLoading, isAnalysisCompleted }: CollectionResultsProps) {
+export function CollectionResults({ data, analysisResults, isLoading, isAnalysisCompleted, onRunAgain }: CollectionResultsProps) {
   // State management for hierarchical drawer expansion
   const [expandedDrawers, setExpandedDrawers] = useState<Set<string>>(new Set());
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExport = async () => {
+    try {
+      if (!data || !analysisResults) return;
+      setIsExporting(true);
+
+      const response = await fetch('/api/export-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: data.url,
+          metadata: data.metadata ?? null,
+          analysis: analysisResults
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Export failed: ${response.status} ${response.statusText}`);
+      }
+
+      const blob = await response.blob();
+      const urlObject = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = urlObject;
+      a.download = (() => {
+        try {
+          const u = new URL(data.url);
+          const now = new Date();
+          const yyyy = String(now.getFullYear());
+          const mm = String(now.getMonth() + 1).padStart(2, '0');
+          const dd = String(now.getDate()).padStart(2, '0');
+          return `GEO Report - ${u.hostname} - ${yyyy}-${mm}-${dd}.pdf`;
+        } catch {
+          return 'GEO Report - report.pdf';
+        }
+      })();
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(urlObject);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   const toggleDrawer = (sectionId: string, drawerId: string) => {
     const key = `${sectionId}-${drawerId}`;
@@ -298,478 +346,56 @@ export function CollectionResults({ data, analysisResults, isLoading, isAnalysis
 
   return (
     <div className="space-y-6">
-      {/* Global AEO Score Section */}
+      {/* Global AEO Score Section (nouvelle mise en page avec métadonnées) */}
       <AEOScoreDisplay
         aeoScore={analysisResults?.aeoScore}
         isLoading={isLoading && !analysisResults?.aeoScore}
+        title={data?.metadata?.basic?.title}
+        description={data?.metadata?.basic?.description}
+        url={data?.url}
+        isCompleted={isAnalysisCompleted}
+        onRunAgain={onRunAgain}
+        onExport={isAnalysisCompleted && !isExporting ? handleExport : undefined}
       />
       
       {/* New Hierarchical Discoverability Section */}
       {isAnalysisCompleted && analysisResults?.discoverability && (
-        <MainSectionComponent
+        <MainSectionAnalysis
           section={analysisResults.discoverability}
-          globalPenalties={[]} // TODO: Get from API response
+          globalPenalties={[]}
           className="mb-6"
         />
       )}
 
       {/* New Hierarchical Structured Data */}
       {isAnalysisCompleted && analysisResults?.structuredData && (
-        <MainSectionComponent
+        <MainSectionAnalysis
           section={analysisResults.structuredData}
         />
       )}
 
       {/* New Hierarchical LLM Formatting */}
       {isAnalysisCompleted && analysisResults?.llmFormatting && (
-        <MainSectionComponent
+        <MainSectionAnalysis
           section={analysisResults.llmFormatting}
         />
       )}
 
       {/* New Hierarchical Accessibility */}
       {isAnalysisCompleted && analysisResults?.accessibility && (
-        <MainSectionComponent
+        <MainSectionAnalysis
           section={analysisResults.accessibility}
         />
       )}
 
       {/* New Hierarchical Readability */}
       {isAnalysisCompleted && analysisResults?.readability && (
-        <MainSectionComponent
+        <MainSectionAnalysis
           section={analysisResults.readability}
         />
       )}
 
-      {/* Analysis in Progress */}
-      {isLoading && !isAnalysisCompleted && (
-        <>
-          {/* New Hierarchical Discoverability Loading */}
-          <div className="bg-gray-950 rounded-xl border border-gray-800 overflow-hidden mb-6">
-            <div className="bg-gradient-to-r from-gray-900 to-gray-800 px-8 py-6 border-b border-gray-700">
-              <div className="flex items-center gap-4">
-                <div className="text-4xl">🔍</div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="h-8 bg-gray-600 rounded animate-pulse w-48"></div>
-                    <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
-                  </div>
-                  <div className="h-4 bg-gray-700 rounded animate-pulse w-64"></div>
-                </div>
-                <div className="text-right">
-                  <div className="h-10 bg-gray-600 rounded animate-pulse w-20 mb-1"></div>
-                  <div className="h-6 bg-gray-700 rounded animate-pulse w-16 mb-1"></div>
-                  <div className="h-4 bg-gray-700 rounded animate-pulse w-14"></div>
-                </div>
-              </div>
-            </div>
-            <div className="p-6">
-              <div className="space-y-4">
-                {/* Foundation Drawer Loading */}
-                <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
-                  <div className="px-6 py-4 flex items-center justify-between">
-                    <div className="flex items-center gap-4 flex-1">
-                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
-                      <div className="flex-1">
-                        <div className="h-5 bg-gray-600 rounded animate-pulse w-40 mb-1"></div>
-                        <div className="h-4 bg-gray-700 rounded animate-pulse w-56"></div>
-                      </div>
-                    </div>
-                    <div className="text-right flex items-center gap-4">
-                      <div>
-                        <div className="h-5 bg-gray-600 rounded animate-pulse w-16 mb-1"></div>
-                        <div className="h-4 bg-gray-700 rounded animate-pulse w-12"></div>
-                      </div>
-                      <div className="w-5 h-5 bg-gray-600 rounded animate-pulse"></div>
-                    </div>
-                  </div>
-                </div>
-                {/* AI Access Drawer Loading */}
-                <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
-                  <div className="px-6 py-4 flex items-center justify-between">
-                    <div className="flex items-center gap-4 flex-1">
-                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
-                      <div className="flex-1">
-                        <div className="h-5 bg-gray-600 rounded animate-pulse w-32 mb-1"></div>
-                        <div className="h-4 bg-gray-700 rounded animate-pulse w-48"></div>
-                      </div>
-                    </div>
-                    <div className="text-right flex items-center gap-4">
-                      <div>
-                        <div className="h-5 bg-gray-600 rounded animate-pulse w-16 mb-1"></div>
-                        <div className="h-4 bg-gray-700 rounded animate-pulse w-12"></div>
-                      </div>
-                      <div className="w-5 h-5 bg-gray-600 rounded animate-pulse"></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="flex gap-2 justify-end mt-6">
-                <div className="h-6 bg-gray-700 rounded animate-pulse w-24"></div>
-                <div className="h-6 bg-gray-700 rounded animate-pulse w-20"></div>
-              </div>
-            </div>
-          </div>
-          
-          {/* New Hierarchical Structured Data Loading */}
-          <div className="bg-gray-950 rounded-xl border border-gray-800 overflow-hidden mb-6">
-            <div className="bg-gradient-to-r from-gray-900 to-gray-800 px-8 py-6 border-b border-gray-700">
-              <div className="flex items-center gap-4">
-                <div className="text-4xl">📋</div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="h-8 bg-gray-600 rounded animate-pulse w-48"></div>
-                    <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
-                  </div>
-                  <div className="h-4 bg-gray-700 rounded animate-pulse w-64"></div>
-                </div>
-                <div className="text-right">
-                  <div className="h-10 bg-gray-600 rounded animate-pulse w-20 mb-1"></div>
-                  <div className="h-6 bg-gray-700 rounded animate-pulse w-16 mb-1"></div>
-                  <div className="h-4 bg-gray-700 rounded animate-pulse w-14"></div>
-                </div>
-              </div>
-            </div>
-            <div className="p-6">
-              <div className="space-y-4">
-                {/* JSON-LD Analysis Drawer Loading */}
-                <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
-                  <div className="px-6 py-4 flex items-center justify-between">
-                    <div className="flex items-center gap-4 flex-1">
-                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
-                      <div className="flex-1">
-                        <div className="h-5 bg-gray-600 rounded animate-pulse w-40 mb-1"></div>
-                        <div className="h-4 bg-gray-700 rounded animate-pulse w-56"></div>
-                      </div>
-                    </div>
-                    <div className="text-right flex items-center gap-4">
-                      <div>
-                        <div className="h-5 bg-gray-600 rounded animate-pulse w-16 mb-1"></div>
-                        <div className="h-4 bg-gray-700 rounded animate-pulse w-12"></div>
-                      </div>
-                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Meta Tags Analysis Drawer Loading */}
-                <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
-                  <div className="px-6 py-4 flex items-center justify-between">
-                    <div className="flex items-center gap-4 flex-1">
-                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
-                      <div className="flex-1">
-                        <div className="h-5 bg-gray-600 rounded animate-pulse w-44 mb-1"></div>
-                        <div className="h-4 bg-gray-700 rounded animate-pulse w-48"></div>
-                      </div>
-                    </div>
-                    <div className="text-right flex items-center gap-4">
-                      <div>
-                        <div className="h-5 bg-gray-600 rounded animate-pulse w-16 mb-1"></div>
-                        <div className="h-4 bg-gray-700 rounded animate-pulse w-12"></div>
-                      </div>
-                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Social Meta Analysis Drawer Loading */}
-                <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
-                  <div className="px-6 py-4 flex items-center justify-between">
-                    <div className="flex items-center gap-4 flex-1">
-                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
-                      <div className="flex-1">
-                        <div className="h-5 bg-gray-600 rounded animate-pulse w-48 mb-1"></div>
-                        <div className="h-4 bg-gray-700 rounded animate-pulse w-52"></div>
-                      </div>
-                    </div>
-                    <div className="text-right flex items-center gap-4">
-                      <div>
-                        <div className="h-5 bg-gray-600 rounded animate-pulse w-16 mb-1"></div>
-                        <div className="h-4 bg-gray-700 rounded animate-pulse w-12"></div>
-                      </div>
-                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* New Hierarchical LLM Formatting Loading */}
-          <div className="bg-gray-950 rounded-xl border border-gray-800 overflow-hidden mb-6">
-            <div className="bg-gradient-to-r from-gray-900 to-gray-800 px-8 py-6 border-b border-gray-700">
-              <div className="flex items-center gap-4">
-                <div className="text-4xl">🤖</div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="h-8 bg-gray-600 rounded animate-pulse w-48"></div>
-                    <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
-                  </div>
-                  <div className="h-4 bg-gray-700 rounded animate-pulse w-64"></div>
-                </div>
-                <div className="text-right">
-                  <div className="h-10 bg-gray-600 rounded animate-pulse w-20 mb-1"></div>
-                  <div className="h-6 bg-gray-700 rounded animate-pulse w-16 mb-1"></div>
-                  <div className="h-4 bg-gray-700 rounded animate-pulse w-14"></div>
-                </div>
-              </div>
-            </div>
-            <div className="p-6">
-              <div className="space-y-4">
-                {/* Heading Structure Drawer Loading */}
-                <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
-                  <div className="px-6 py-4 flex items-center justify-between">
-                    <div className="flex items-center gap-4 flex-1">
-                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
-                      <div className="flex-1">
-                        <div className="h-5 bg-gray-600 rounded animate-pulse w-44 mb-1"></div>
-                        <div className="h-4 bg-gray-700 rounded animate-pulse w-60"></div>
-                      </div>
-                    </div>
-                    <div className="text-right flex items-center gap-4">
-                      <div>
-                        <div className="h-5 bg-gray-600 rounded animate-pulse w-16 mb-1"></div>
-                        <div className="h-4 bg-gray-700 rounded animate-pulse w-12"></div>
-                      </div>
-                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Semantic HTML5 Drawer Loading */}
-                <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
-                  <div className="px-6 py-4 flex items-center justify-between">
-                    <div className="flex items-center gap-4 flex-1">
-                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
-                      <div className="flex-1">
-                        <div className="h-5 bg-gray-600 rounded animate-pulse w-40 mb-1"></div>
-                        <div className="h-4 bg-gray-700 rounded animate-pulse w-58"></div>
-                      </div>
-                    </div>
-                    <div className="text-right flex items-center gap-4">
-                      <div>
-                        <div className="h-5 bg-gray-600 rounded animate-pulse w-16 mb-1"></div>
-                        <div className="h-4 bg-gray-700 rounded animate-pulse w-12"></div>
-                      </div>
-                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Link Quality Drawer Loading */}
-                <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
-                  <div className="px-6 py-4 flex items-center justify-between">
-                    <div className="flex items-center gap-4 flex-1">
-                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
-                      <div className="flex-1">
-                        <div className="h-5 bg-gray-600 rounded animate-pulse w-36 mb-1"></div>
-                        <div className="h-4 bg-gray-700 rounded animate-pulse w-54"></div>
-                      </div>
-                    </div>
-                    <div className="text-right flex items-center gap-4">
-                      <div>
-                        <div className="h-5 bg-gray-600 rounded animate-pulse w-16 mb-1"></div>
-                        <div className="h-4 bg-gray-700 rounded animate-pulse w-12"></div>
-                      </div>
-                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Technical Structure Drawer Loading */}
-                <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
-                  <div className="px-6 py-4 flex items-center justify-between">
-                    <div className="flex items-center gap-4 flex-1">
-                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
-                      <div className="flex-1">
-                        <div className="h-5 bg-gray-600 rounded animate-pulse w-46 mb-1"></div>
-                        <div className="h-4 bg-gray-700 rounded animate-pulse w-56"></div>
-                      </div>
-                    </div>
-                    <div className="text-right flex items-center gap-4">
-                      <div>
-                        <div className="h-5 bg-gray-600 rounded animate-pulse w-16 mb-1"></div>
-                        <div className="h-4 bg-gray-700 rounded animate-pulse w-12"></div>
-                      </div>
-                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* New Hierarchical Accessibility Loading */}
-          <div className="bg-gray-950 rounded-xl border border-gray-800 overflow-hidden mb-6">
-            <div className="bg-gradient-to-r from-gray-900 to-gray-800 px-8 py-6 border-b border-gray-700">
-              <div className="flex items-center gap-4">
-                <div className="text-4xl">♿</div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="h-8 bg-gray-600 rounded animate-pulse w-48"></div>
-                    <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
-                  </div>
-                  <div className="h-4 bg-gray-700 rounded animate-pulse w-64"></div>
-                </div>
-                <div className="text-right">
-                  <div className="h-10 bg-gray-600 rounded animate-pulse w-20 mb-1"></div>
-                  <div className="h-6 bg-gray-700 rounded animate-pulse w-16 mb-1"></div>
-                  <div className="h-4 bg-gray-700 rounded animate-pulse w-14"></div>
-                </div>
-              </div>
-            </div>
-            <div className="p-6">
-              <div className="space-y-4">
-                {/* Critical DOM Drawer Loading */}
-                <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
-                  <div className="px-6 py-4 flex items-center justify-between">
-                    <div className="flex items-center gap-4 flex-1">
-                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
-                      <div className="flex-1">
-                        <div className="h-5 bg-gray-600 rounded animate-pulse w-36 mb-1"></div>
-                        <div className="h-4 bg-gray-700 rounded animate-pulse w-64"></div>
-                      </div>
-                    </div>
-                    <div className="text-right flex items-center gap-4">
-                      <div>
-                        <div className="h-5 bg-gray-600 rounded animate-pulse w-16 mb-1"></div>
-                        <div className="h-4 bg-gray-700 rounded animate-pulse w-12"></div>
-                      </div>
-                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Performance Drawer Loading */}
-                <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
-                  <div className="px-6 py-4 flex items-center justify-between">
-                    <div className="flex items-center gap-4 flex-1">
-                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
-                      <div className="flex-1">
-                        <div className="h-5 bg-gray-600 rounded animate-pulse w-32 mb-1"></div>
-                        <div className="h-4 bg-gray-700 rounded animate-pulse w-60"></div>
-                      </div>
-                    </div>
-                    <div className="text-right flex items-center gap-4">
-                      <div>
-                        <div className="h-5 bg-gray-600 rounded animate-pulse w-16 mb-1"></div>
-                        <div className="h-4 bg-gray-700 rounded animate-pulse w-12"></div>
-                      </div>
-                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Images Accessibility Drawer Loading */}
-                <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
-                  <div className="px-6 py-4 flex items-center justify-between">
-                    <div className="flex items-center gap-4 flex-1">
-                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
-                      <div className="flex-1">
-                        <div className="h-5 bg-gray-600 rounded animate-pulse w-48 mb-1"></div>
-                        <div className="h-4 bg-gray-700 rounded animate-pulse w-58"></div>
-                      </div>
-                    </div>
-                    <div className="text-right flex items-center gap-4">
-                      <div>
-                        <div className="h-5 bg-gray-600 rounded animate-pulse w-16 mb-1"></div>
-                        <div className="h-4 bg-gray-700 rounded animate-pulse w-12"></div>
-                      </div>
-                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* New Hierarchical Readability Loading */}
-          <div className="bg-gray-950 rounded-xl border border-gray-800 overflow-hidden mb-6">
-            <div className="bg-gradient-to-r from-gray-900 to-gray-800 px-8 py-6 border-b border-gray-700">
-              <div className="flex items-center gap-4">
-                <div className="text-4xl">📖</div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="h-8 bg-gray-600 rounded animate-pulse w-48"></div>
-                    <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
-                  </div>
-                  <div className="h-4 bg-gray-700 rounded animate-pulse w-64"></div>
-                </div>
-                <div className="text-right">
-                  <div className="h-10 bg-gray-600 rounded animate-pulse w-20 mb-1"></div>
-                  <div className="h-6 bg-gray-700 rounded animate-pulse w-16 mb-1"></div>
-                  <div className="h-4 bg-gray-700 rounded animate-pulse w-14"></div>
-                </div>
-              </div>
-            </div>
-            <div className="p-6">
-              <div className="space-y-4">
-                {/* Text Complexity Drawer Loading */}
-                <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
-                  <div className="px-6 py-4 flex items-center justify-between">
-                    <div className="flex items-center gap-4 flex-1">
-                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
-                      <div className="flex-1">
-                        <div className="h-5 bg-gray-600 rounded animate-pulse w-40 mb-1"></div>
-                        <div className="h-4 bg-gray-700 rounded animate-pulse w-56"></div>
-                      </div>
-                    </div>
-                    <div className="text-right flex items-center gap-4">
-                      <div>
-                        <div className="h-5 bg-gray-600 rounded animate-pulse w-16 mb-1"></div>
-                        <div className="h-4 bg-gray-700 rounded animate-pulse w-12"></div>
-                      </div>
-                      <div className="w-5 h-5 bg-gray-600 rounded animate-pulse"></div>
-                    </div>
-                  </div>
-                </div>
-                {/* Content Organization Drawer Loading */}
-                <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
-                  <div className="px-6 py-4 flex items-center justify-between">
-                    <div className="flex items-center gap-4 flex-1">
-                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
-                      <div className="flex-1">
-                        <div className="h-5 bg-gray-600 rounded animate-pulse w-44 mb-1"></div>
-                        <div className="h-4 bg-gray-700 rounded animate-pulse w-60"></div>
-                      </div>
-                    </div>
-                    <div className="text-right flex items-center gap-4">
-                      <div>
-                        <div className="h-5 bg-gray-600 rounded animate-pulse w-16 mb-1"></div>
-                        <div className="h-4 bg-gray-700 rounded animate-pulse w-12"></div>
-                      </div>
-                      <div className="w-5 h-5 bg-gray-600 rounded animate-pulse"></div>
-                    </div>
-                  </div>
-                </div>
-                {/* Sentence Quality Drawer Loading */}
-                <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
-                  <div className="px-6 py-4 flex items-center justify-between">
-                    <div className="flex items-center gap-4 flex-1">
-                      <div className="w-6 h-6 bg-gray-600 rounded animate-pulse"></div>
-                      <div className="flex-1">
-                        <div className="h-5 bg-gray-600 rounded animate-pulse w-36 mb-1"></div>
-                        <div className="h-4 bg-gray-700 rounded animate-pulse w-52"></div>
-                      </div>
-                    </div>
-                    <div className="text-right flex items-center gap-4">
-                      <div>
-                        <div className="h-5 bg-gray-600 rounded animate-pulse w-16 mb-1"></div>
-                        <div className="h-4 bg-gray-700 rounded animate-pulse w-12"></div>
-                      </div>
-                      <div className="w-5 h-5 bg-gray-600 rounded animate-pulse"></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="flex gap-2 justify-end mt-6">
-                <div className="h-6 bg-gray-700 rounded animate-pulse w-24"></div>
-                <div className="h-6 bg-gray-700 rounded animate-pulse w-20"></div>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
+      {/* Loading UI removed: handled by parent page */}
     </div>
   );
 } 

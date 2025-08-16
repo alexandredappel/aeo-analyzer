@@ -66,7 +66,7 @@ export function analyzeMetaTags(html: string): MetricCard {
       problem: "The <title> tag is missing.",
       solution: "Add a <title> tag inside the <head> to define your page's main title for search engines.",
       explanation: "The <title> tag is the strongest signal about your page's main topic for both search engines and AIs. Its absence is a fundamental SEO error.",
-      impact: 10
+      impact: 9
     });
   } else {
     titleScore += 5; // Basic presence

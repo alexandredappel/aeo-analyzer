@@ -5,18 +5,17 @@
  * Structure: Section → Drawers → Cards
  */
 
-// Composants de base
-export { StatusIcon } from './StatusIcon';
-export { MetricCard } from './MetricCard';
-export { DrawerSubSection } from './DrawerSubSection';
-export { MainSectionComponent } from './MainSectionComponent';
+// Composants d'analyse
+export { SubSectionAnalysis } from './SubSectionAnalysis';
+export { MainSectionAnalysis } from './MainSectionAnalysis';
+export { ImpactBadge } from './ImpactBadge';
+export { ImpactBadgeDemo } from './ImpactBadgeDemo';
 
 // Types réexportés pour faciliter l'utilisation
 export type {
-  PerformanceStatus,
-  MetricCard as MetricCardType,
-  DrawerSubSection as DrawerSubSectionType,
   MainSection,
-  GlobalPenalty,
-  AEOScoreResult
-} from '@/types/analysis-architecture'; 
+  DrawerSubSection,
+  MetricCard,
+  Recommendation,
+  PerformanceStatus
+} from '@/types/analysis-architecture';

@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
-import { Header } from "@/components/ui/Header";
-import { Footer } from "@/components/ui/Footer";
+import { HeroHeader } from "@/components/header";
+import FooterSection from "@/components/footer";
 
 interface ReportLayoutProps {
   children: ReactNode;
@@ -9,16 +9,16 @@ interface ReportLayoutProps {
 
 export function ReportLayout({ children, headerTitle = "AEO Auditor" }: ReportLayoutProps) {
   return (
-    <div className="min-h-screen bg-gray-900 text-white flex flex-col">
-      <Header title={headerTitle} />
+    <div className="min-h-screen bg-background text-foreground flex flex-col">
+      <HeroHeader />
       
-      <main className="flex-1 px-4 py-8">
-        <div className="max-w-4xl mx-auto">
+      <main className="flex-1 px-4 md:px-6 pt-14 md:pt-28 pb-8 md:pb-12">
+        <div className="max-w-5xl mx-auto">
           {children}
         </div>
       </main>
       
-      <Footer text="Built for SEO professionals" />
+      <FooterSection />
     </div>
   );
 } 

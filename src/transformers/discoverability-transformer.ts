@@ -65,7 +65,7 @@ export class DiscoverabilityTransformer {
       name: this.translateDrawerName(drawer.id),
       description: this.translateDrawerDescription(drawer.id),
       cards: enhancedCards,
-      status: this.calculateStatus(drawer.totalScore, drawer.maxScore)
+      status: drawer.status
     };
   }
 
@@ -107,7 +107,7 @@ export class DiscoverabilityTransformer {
       ...card,
       name: this.translateCardName(card.id),
       explanation: this.translateExplanation(card.id),
-      status: this.calculateStatus(card.score, card.maxScore),
+      status: card.status,
       recommendations: card.recommendations || [], // Ensure recommendations is always an array
       successMessage: (!card.recommendations || card.recommendations.length === 0) 
         ? (card.successMessage || "Excellent! Everything looks good for this metric.")

@@ -392,6 +392,104 @@ export async function fetchSitemap(urlString: string): Promise<CrawlResult> {
 }
 
 /**
+ * Fetch llms.txt or llms-full.txt file
+ * @param urlString - Base URL to fetch llms.txt from
+ * @returns Promise with crawl result
+ */
+export async function fetchLlmsTxt(urlString: string): Promise<CrawlResult> {
+  const startTime = Date.now();
+  
+  try {
+    const baseUrl = validateAndNormalizeUrl(urlString);
+    
+    // First attempt: try to fetch llms.txt
+    const llmsUrl = new URL('/llms.txt', baseUrl);
+    logger.info(`Fetching llms.txt from: ${llmsUrl.href}`);
+    
+    try {
+      const response = await makeRequest(llmsUrl);
+      const elapsed = Date.now() - startTime;
+      
+      if (response.statusCode === 200) {
+        logger.success(`llms.txt fetched successfully (${elapsed}ms)`);
+        
+        return {
+          success: true,
+          data: response.body,
+          metadata: {
+            statusCode: response.statusCode,
+            contentLength: response.body.length,
+            responseTime: elapsed
+          }
+        };
+      }
+    } catch (error) {
+      // If llms.txt fails, continue to try llms-full.txt
+      logger.info(`llms.txt not accessible, trying llms-full.txt`);
+    }
+    
+    // Second attempt: try to fetch llms-full.txt
+    const llmsFullUrl = new URL('/llms-full.txt', baseUrl);
+    logger.info(`Fetching llms-full.txt from: ${llmsFullUrl.href}`);
+    
+    try {
+      const response = await makeRequest(llmsFullUrl);
+      const elapsed = Date.now() - startTime;
+      
+      if (response.statusCode === 200) {
+        logger.success(`llms-full.txt fetched successfully (${elapsed}ms)`);
+        
+        return {
+          success: true,
+          data: response.body,
+          metadata: {
+            statusCode: response.statusCode,
+            contentLength: response.body.length,
+            responseTime: elapsed
+          }
+        };
+      }
+    } catch (error) {
+      // Both attempts failed
+      const elapsed = Date.now() - startTime;
+      logger.warn(`Both llms.txt and llms-full.txt failed to fetch`);
+      
+      return {
+        success: false,
+        error: 'Both llms.txt and llms-full.txt not accessible',
+        metadata: {
+          responseTime: elapsed
+        }
+      };
+    }
+    
+    // If we reach here, both attempts returned non-200 status codes
+    const elapsed = Date.now() - startTime;
+    logger.warn(`Neither llms.txt nor llms-full.txt returned 200 status`);
+    
+    return {
+      success: false,
+      error: 'Neither llms.txt nor llms-full.txt accessible',
+      metadata: {
+        responseTime: elapsed
+      }
+    };
+    
+  } catch (error) {
+    const elapsed = Date.now() - startTime;
+    logger.error(`Failed to fetch llms files from ${urlString}: ${(error as Error).message}`);
+    
+    return {
+      success: false,
+      error: (error as Error).message,
+      metadata: {
+        responseTime: elapsed
+      }
+    };
+  }
+}
+
+/**
  * Extract basic metadata from HTML content
  * @param html - HTML content
  * @returns Basic metadata extracted from HTML

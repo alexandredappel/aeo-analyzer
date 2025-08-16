@@ -18,7 +18,7 @@ const NAVIGATIONAL_ACCESSIBILITY_KB = {
     problem: "No semantic <nav> tag was found on the page.",
     solution: "Wrap your main navigation menus (header, footer, sidebar) within <nav> tags.",
     explanation: "The <nav> tag is the strongest semantic signal to tell an AI 'this is a menu'. Without it, the AI has to guess which group of links is for navigation, which can lead to a poor understanding of your site's structure.",
-    impact: 10
+    impact: 9
   },
   noStaticLinksInNav: {
     problem: "A <nav> tag was found, but it contains no static <a> links with an 'href' attribute.",

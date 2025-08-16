@@ -11,6 +11,10 @@ export { LoadingSpinner } from './LoadingSpinner';
 export { AEOScoreDisplay } from './AEOScoreDisplay';
 export { FeatureBadges } from './FeatureBadges';
 export { AIEngineLogos } from './AIEngineLogos';
+export { AnalysisProgress } from './AnalysisProgress';
+
+// Composants d'analyse hiérarchique
+export * from './analysis';
 
 // Composants d'analyse hiérarchique
 export * from './analysis'; 

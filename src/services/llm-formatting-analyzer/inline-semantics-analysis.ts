@@ -19,12 +19,14 @@ const KNOWLEDGE_BASE = {
   genericLinkText: {
     problem: "[count] links/buttons with generic text like '[text]' were found.",
     solution: "Add a descriptive 'aria-label' attribute to these elements to provide clear context for AIs and assistive tech.",
+    explanation: "Ambiguous links are semantic dead-ends for AIs. An 'aria-label' provides explicit context about the destination, helping the AI understand the site's structure and user journey.",
     impact: 9
   },
   emptyLink: {
     problem: "[count] links/buttons have no text content or descriptive 'aria-label'.",
     solution: "Ensure every '<a>' and '<button>' element has either visible text or a comprehensive 'aria-label'.",
-    impact: 10
+    explanation: "'Empty' links are invisible to AIs and assistive technologies. They break the navigational graph of your website, preventing crawlers from discovering linked pages.",
+    impact: 9
   }
 } as const;
 
@@ -161,6 +163,7 @@ function createCtaClarityCard($: cheerio.CheerioAPI): MetricCard {
           text: examples
         }),
         solution: KNOWLEDGE_BASE.genericLinkText.solution,
+        explanation: KNOWLEDGE_BASE.genericLinkText.explanation,
         impact: KNOWLEDGE_BASE.genericLinkText.impact
       });
       score -= Math.min(genericLinksCount, 10); // Cap penalty at 10 points (adjusted for 20-point scale)
@@ -172,6 +175,7 @@ function createCtaClarityCard($: cheerio.CheerioAPI): MetricCard {
           count: emptyLinksCount
         }),
         solution: KNOWLEDGE_BASE.emptyLink.solution,
+        explanation: KNOWLEDGE_BASE.emptyLink.explanation,
         impact: KNOWLEDGE_BASE.emptyLink.impact
       });
       score -= Math.min(emptyLinksCount * 2, 10); // Cap penalty at 10 points (adjusted for 20-point scale)

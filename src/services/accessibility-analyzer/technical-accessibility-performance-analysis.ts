@@ -36,7 +36,7 @@ const TECHNICAL_ACCESSIBILITY_KB = {
     problem: `The overall Performance Score is ${score}/100, which is below the recommended target of 75.`,
     solution: `Click the link below to open the Google PageSpeed Insights report for this specific URL.`,
     explanation: "A low performance score signals to AIs that the page is slow, which can negatively impact crawling efficiency and perceived quality. The detailed report will pinpoint the exact causes.",
-    impact: 10
+    impact: 9
   }),
   
   slowLCP: (lcpScore: number) => ({

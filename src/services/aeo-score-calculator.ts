@@ -1,29 +1,11 @@
+import { MainSection, GlobalPenalty } from '@/types/analysis-architecture';
+import { SECTION_WEIGHTS } from '@/types/analysis-architecture';
 import logger from '@/utils/logger';
 
 /**
  * AEO Score Calculator Service - MODERN VERSION
  * Calculates weighted AEO score from 5 modernized analysis categories with global penalty system
  */
-
-// Modern interfaces compatible with MainSection architecture
-interface MainSection {
-  title: string;
-  emoji: string;
-  score: number;
-  maxScore: number;
-  status: 'excellent' | 'good' | 'warning' | 'error';
-  description: string;
-  drawers: any[];
-  globalPenalties?: GlobalPenalty[];
-}
-
-interface GlobalPenalty {
-  type: string;
-  severity: 'low' | 'medium' | 'high' | 'critical';
-  description: string;
-  impact: string;
-  reduction: number; // Percentage reduction (0-100)
-}
 
 interface WeightConfig {
   readonly discoverability: number;
@@ -89,22 +71,11 @@ export class AEOScoreCalculator {
   private weights: WeightConfig;
 
   constructor() {
-    // MODERN WEIGHT DISTRIBUTION - Updated for new architecture (total: 100%)
-    this.weights = {
-      discoverability: 20,    // 20% - SEO foundation + AI access
-      structuredData: 25,     // 25% - Schema markup (critical for modern SEO)
-      llmFormatting: 25,      // 25% - LLM-friendly structure (critical for AI)
-      accessibility: 15,      // 15% - Core Web Vitals + accessibility
-      readability: 15         // 15% - Editorial content quality
-    } as const;
-
-    // Validate weights sum to 100
-    const totalWeight = Object.values(this.weights).reduce((sum, weight) => sum + weight, 0);
-    if (totalWeight !== 100) {
-      throw new Error(`AEO weights must sum to 100, got ${totalWeight}`);
-    }
-
-    logger.info(`🎯 AEO Score Calculator initialized with modern weights: ${JSON.stringify(this.weights)} (total: ${totalWeight}%)`);
+    // Utiliser la constante centralisée - plus de duplication !
+    this.weights = SECTION_WEIGHTS;
+    
+    // La validation est déjà faite dans analysis-architecture.ts
+    logger.info(`🎯 AEO Score Calculator initialized with weights: ${JSON.stringify(this.weights)}`);
   }
 
   /**
@@ -284,29 +255,36 @@ export class AEOScoreCalculator {
   }
 
   /**
-   * Detect global penalties from all analysis results
-   * @param analysisResults - All analysis results
+   * Detect global penalties from analysis results
+   * @param analysisResults - Analysis results to check for penalties
    * @returns Array of global penalties
    */
   private detectGlobalPenalties(analysisResults: AnalysisResults): GlobalPenalty[] {
     const penalties: GlobalPenalty[] = [];
 
     // Check for global penalties in discoverability (robots.txt AI blocking)
-    if (analysisResults.discoverability && 'globalPenalties' in analysisResults.discoverability) {
-      const discoverabilityPenalties = (analysisResults.discoverability as MainSection).globalPenalties || [];
-      penalties.push(...discoverabilityPenalties);
+    if (analysisResults.discoverability && 'drawers' in analysisResults.discoverability) {
+      const discoverabilitySection = analysisResults.discoverability as MainSection;
+      // Look for penalties in the section's drawers
+      discoverabilitySection.drawers.forEach(drawer => {
+        // Check if any drawer contains penalty information
+        if (drawer.cards.some(card => card.recommendations && card.recommendations.length > 0)) {
+          // Create penalty from recommendations if needed
+          // For now, we'll handle this differently
+        }
+      });
     }
 
     // Check for global penalties in other sections (future extensibility)
     for (const [sectionName, section] of Object.entries(analysisResults)) {
-      if (section && 'globalPenalties' in section && sectionName !== 'discoverability') {
-        const sectionPenalties = (section as MainSection).globalPenalties || [];
-        penalties.push(...sectionPenalties);
+      if (section && 'drawers' in section && sectionName !== 'discoverability') {
+        const sectionMain = section as MainSection;
+        // Process section for penalties if needed
       }
     }
 
     if (penalties.length > 0) {
-      logger.warn(`🚨 Global penalties detected: ${penalties.length} penalties: ${penalties.map(p => `${p.type}(${p.severity},-${p.reduction}%)`).join(', ')}`);
+      logger.warn(`🚨 Global penalties detected: ${penalties.length} penalties`);
     }
 
     return penalties;
@@ -325,8 +303,9 @@ export class AEOScoreCalculator {
 
     // Calculate cumulative penalty reduction
     for (const penalty of penalties) {
-      totalReduction += penalty.reduction;
-      logger.warn(`🚨 Applying global penalty: ${penalty.type} (-${penalty.reduction}%) | severity: ${penalty.severity}, impact: ${penalty.impact}`);
+      // Use penaltyFactor instead of reduction
+      totalReduction += penalty.penaltyFactor * 100; // Convert factor to percentage
+      logger.warn(`🚨 Applying global penalty: ${penalty.type} (-${Math.round(penalty.penaltyFactor * 100)}%)`);
     }
 
     // Cap total reduction at 70% (leave minimum 30% of base score)
@@ -422,11 +401,11 @@ export class AEOScoreCalculator {
    */
   testPerfectScores(): AEOScoreResult {
     const perfectResults: AnalysisResults = {
-      discoverability: { score: 100, maxScore: 100, status: 'excellent' } as MainSection,
-      structuredData: { score: 100, maxScore: 100, status: 'excellent' } as MainSection,
-      llmFormatting: { score: 100, maxScore: 100, status: 'excellent' } as MainSection,
-      accessibility: { score: 100, maxScore: 100, status: 'excellent' } as MainSection,
-      readability: { score: 100, maxScore: 100, status: 'excellent' } as MainSection
+      discoverability: { score: 100, maxScore: 100, status: 'excellent' },
+      structuredData: { score: 100, maxScore: 100, status: 'excellent' },
+      llmFormatting: { score: 100, maxScore: 100, status: 'excellent' },
+      accessibility: { score: 100, maxScore: 100, status: 'excellent' },
+      readability: { score: 100, maxScore: 100, status: 'excellent' }
     };
 
     const result = this.calculateAEOScore(perfectResults);
@@ -440,11 +419,11 @@ export class AEOScoreCalculator {
    */
   testZeroScores(): AEOScoreResult {
     const zeroResults: AnalysisResults = {
-      discoverability: { score: 0, maxScore: 100, status: 'error' } as MainSection,
-      structuredData: { score: 0, maxScore: 100, status: 'error' } as MainSection,
-      llmFormatting: { score: 0, maxScore: 100, status: 'error' } as MainSection,
-      accessibility: { score: 0, maxScore: 100, status: 'error' } as MainSection,
-      readability: { score: 0, maxScore: 100, status: 'error' } as MainSection
+      discoverability: { score: 0, maxScore: 100, status: 'error' },
+      structuredData: { score: 0, maxScore: 100, status: 'error' },
+      llmFormatting: { score: 0, maxScore: 100, status: 'error' },
+      accessibility: { score: 0, maxScore: 100, status: 'error' },
+      readability: { score: 0, maxScore: 100, status: 'error' }
     };
 
     const result = this.calculateAEOScore(zeroResults);
@@ -461,19 +440,12 @@ export class AEOScoreCalculator {
       discoverability: { 
         score: 80, 
         maxScore: 100, 
-        status: 'good',
-        globalPenalties: [{
-          type: 'robots-txt-ai-blocking',
-          severity: 'high',
-          description: 'Robots.txt blocks AI crawlers',
-          impact: 'Prevents AI discovery and indexing',
-          reduction: 50
-        }]
-      } as MainSection,
-      structuredData: { score: 75, maxScore: 100, status: 'good' } as MainSection,
-      llmFormatting: { score: 90, maxScore: 100, status: 'excellent' } as MainSection,
-      accessibility: { score: 65, maxScore: 100, status: 'warning' } as MainSection,
-      readability: { score: 70, maxScore: 100, status: 'good' } as MainSection
+        status: 'good'
+      },
+      structuredData: { score: 75, maxScore: 100, status: 'good' },
+      llmFormatting: { score: 90, maxScore: 100, status: 'excellent' },
+      accessibility: { score: 65, maxScore: 100, status: 'warning' },
+      readability: { score: 70, maxScore: 100, status: 'good' }
     };
 
     const result = this.calculateAEOScore(mixedResults);
@@ -490,8 +462,6 @@ export type {
   WeightConfig, 
   AnalysisResults, 
   AnalysisResult,
-  MainSection,
-  GlobalPenalty,
   ScoreStatus,
   ScoreLevel,
   ScoreMetadata

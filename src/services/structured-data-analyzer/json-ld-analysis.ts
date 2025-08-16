@@ -1,149 +1,218 @@
 /**
  * JSON-LD ANALYSIS MODULE
  * Comprehensive semantic analysis of JSON-LD structured data
- * Includes identity, main entity, enrichment schemas, and graph connectivity analysis
+ * Includes identity, main entity, enrichment schemas, and graph connectivity analysis.
+ * This is the refactored version with a full Knowledge Base.
  */
 
-import { MetricCard, Recommendation, DrawerSubSection } from '@/types/analysis-architecture';
+import { MetricCard, Recommendation } from '@/types/analysis-architecture';
 import { 
-  parseAndNormalizeEntities, 
-  parseJSONLD, 
-  getPerformanceStatus, 
-  calculateDiversityBonus,
-  calculateSchemaScore
+  parseAndNormalizeEntities,
+  getPerformanceStatus 
 } from './shared/utils';
 import { 
   JSON_LD_SCORING, 
-  MAIN_ENTITY_TYPES, 
-  SCHEMA_WEIGHTS, 
-  UNKNOWN_SCHEMA_BONUS, 
-  MAX_SCHEMA_POINTS,
-  REQUIRED_SCHEMA_FIELDS
+  MAIN_ENTITY_TYPES
 } from './shared/constants';
-import { JSONLDData, SchemaEntity, MainEntityType } from './shared/types';
+import { SchemaEntity, MainEntityType } from './shared/types';
+
+// ===================================================================================
+// KNOWLEDGE BASE FOR JSON-LD ANALYSIS
+// ===================================================================================
+
+const JSON_LD_KNOWLEDGE_BASE = {
+  // Identity & Structure
+  noOwner: {
+    problem: "No 'Organization' or 'Person' entity was found to define the site owner.",
+    solution: "Add an 'Organization' schema for a company or a 'Person' schema for an individual.",
+    explanation: "Defining the owner is crucial for establishing identity and trust, which are key signals for AIs.",
+    impact: 9
+  },
+  ownerMissingName: {
+    problem: (ownerType: string) => `The '${ownerType}' entity is missing a 'name'.`,
+    solution: (ownerType: string) => `Provide a 'name' for your '${ownerType}' to state who you are.`,
+    explanation: "The name is the most basic identifier for your entity. Without it, AIs don't know who is behind the content.",
+    impact: 8
+  },
+  ownerMissingUrl: {
+    problem: (ownerType: string) => `The '${ownerType}' entity is missing a 'url'.`,
+    solution: "Add a 'url' property pointing to your homepage to link your entity to your site.",
+    explanation: "The URL property creates a direct, verifiable link between your schema entity and your actual website.",
+    impact: 7
+  },
+  orgMissingLogo: {
+    problem: "The 'Organization' entity is missing a 'logo'.",
+    solution: "Add a 'logo' property with a full URL to your logo image to improve brand recognition.",
+    explanation: "The logo reinforces brand identity and is a strong visual signal for AIs that can process images.",
+    impact: 6
+  },
+  ownerMissingSameAs: {
+    problem: (ownerType: string) => `The '${ownerType}' entity is missing 'sameAs' links to social or professional profiles.`,
+    solution: "Add a 'sameAs' array with URLs to your social profiles to consolidate your identity.",
+    explanation: "'sameAs' links help AIs connect your website entity to your other official profiles, building a stronger and more trustworthy identity graph.",
+    impact: 8
+  },
+  noWebsite: {
+    problem: "No 'WebSite' entity was found.",
+    solution: "Add a 'WebSite' schema to describe the site itself and its functionalities.",
+    explanation: "The 'WebSite' schema is fundamental for defining the site as an entity and specifying features like its internal search engine.",
+    impact: 9
+  },
+  noSearchAction: {
+    problem: "The 'WebSite' entity is missing a 'SearchAction'.",
+    solution: "Add a 'potentialAction' of type 'SearchAction' to define your internal site search.",
+    explanation: "A 'SearchAction' explicitly tells AIs how your site search works, allowing them to potentially use it or understand your site's structure better.",
+    impact: 6
+  },
+  noBreadcrumb: {
+    problem: "No 'BreadcrumbList' entity was found on this page.",
+    solution: "Implement a 'BreadcrumbList' to show the page's location within the site hierarchy.",
+    explanation: "Breadcrumbs are a clear roadmap for AIs, helping them understand the page's context and its relation to the rest of the site.",
+    impact: 7
+  },
+
+  // Main Entity
+  noMainEntity: {
+    problem: "No main entity (e.g., Article, Product) was found on this page.",
+    solution: "Add a primary schema that accurately describes the main content of this page.",
+    explanation: "The main entity is the core subject of the page. Without it, an AI doesn't know what the page is fundamentally about.",
+    impact: 9
+  },
+  articleMissingHeadline: {
+    problem: (articleType: string) => `The '${articleType}' is missing a 'headline'.`,
+    solution: "Add a 'headline' property with the main title of the content.",
+    explanation: "The headline is the primary textual identifier for an article, crucial for summaries and topic identification.",
+    impact: 9
+  },
+  authorIsText: {
+    problem: (articleType: string) => `The '${articleType}' author is plain text instead of a linked 'Person' entity.`,
+    solution: "Change the 'author' from a simple name to a nested 'Person' schema to establish expertise.",
+    explanation: "Linking to a 'Person' entity for the author creates a connection to a real-world expert, a very strong signal of authority (E-E-A-T) for AIs.",
+    impact: 9
+  },
+   publisherIsText: {
+    problem: (articleType: string) => `The '${articleType}' publisher is plain text instead of a linked 'Organization' entity.`,
+    solution: "Change the 'publisher' to a nested 'Organization' schema to clarify who published the content.",
+    explanation: "Linking to an 'Organization' entity for the publisher clearly establishes the responsible entity, another key trust signal.",
+    impact: 8
+  },
+  productMissingOffers: {
+    problem: "The 'Product' is missing the 'offers' property.",
+    solution: "Add an 'offers' property containing an 'Offer' schema to provide price and availability.",
+    explanation: "The 'offers' property is what makes a product actionable for an AI. It provides the critical commercial data like price and stock status.",
+    impact: 9
+  },
+
+  // Enrichment Schemas
+  faqMalformed: {
+    problem: "The 'FAQPage' exists but is missing well-structured questions and answers.",
+    solution: "Add a 'mainEntity' array containing 'Question' entities, each with an 'acceptedAnswer' property.",
+    explanation: "A correctly structured FAQPage allows AIs to directly extract question-answer pairs, which can be used to answer user queries.",
+    impact: 7
+  },
+  howToMalformed: {
+    problem: "The 'HowTo' guide is missing its sequence of 'step's.",
+    solution: "Add a 'step' property containing an array of 'HowToStep' items to outline the process.",
+    explanation: "The 'step' property is essential for AIs to understand the sequential nature of a tutorial and present it correctly.",
+    impact: 7
+  },
+  
+  // Graph Connectivity
+  missingId: {
+    problem: (entityType: string) => `The '${entityType}' entity is missing a unique identifier ('@id').`,
+    solution: "Add a unique '@id' with the page's unique URL to this entity. Think of it as a unique 'address' that allows other schemas to connect to it.",
+    explanation: "The '@id' is the glue of the Knowledge Graph. It allows you to create an interconnected web of data, rather than a list of isolated items, which is far more powerful for AI comprehension.",
+    impact: 9
+  },
+  noConnectivity: {
+    problem: "Entities are not linking to each other using '@id' references.",
+    solution: "Use '@id' properties to create connections between related entities (e.g., an 'Article's 'author' property should link to the '@id' of a 'Person' entity).",
+    explanation: "Creating explicit links between your entities transforms your data from a simple list into a rich, interconnected graph that AIs can traverse and understand.",
+    impact: 8
+  }
+};
+
+
+// ===================================================================================
+// ANALYSIS FUNCTIONS
+// ===================================================================================
 
 /**
- * NEW ANALYZER: Identity & Structure Foundation
- * 
- * Analyzes if the website clearly introduces itself: Who you are (Organization),
- * what the site is (WebSite), and its structure (BreadcrumbList).
- * This is the foundation of trust and understanding for AIs.
- * 
- * @param entities Array of normalized Schema.org entities
- * @returns MetricCard with identity and structure analysis
+ * Analyzes Identity & Structure Foundation (30 points)
  */
 function analyzeIdentityAndStructure(entities: SchemaEntity[]): MetricCard {
   let score = 0;
-  let recommendations: Recommendation[] = [];
+  const recommendations: Recommendation[] = [];
 
-  // Owner entity analysis (Organization or Person) - 15 points max
-  const organizationEntity = entities.find(entity => entity['@type'] === 'Organization');
-  const personEntity = entities.find(entity => entity['@type'] === 'Person');
-  const ownerEntity = organizationEntity || personEntity;
-  const ownerType = organizationEntity ? 'Organization' : (personEntity ? 'Person' : null);
+  const ownerEntity = entities.find(e => e['@type'] === 'Organization' || e['@type'] === 'Person');
+  const ownerType = ownerEntity ? ownerEntity['@type'] : null;
 
   if (ownerEntity && ownerType) {
-    score += 5; // Base points for having owner entity
-
-    // Check for name
+    score += 5;
     if (!ownerEntity.name) {
+      const kbEntry = JSON_LD_KNOWLEDGE_BASE.ownerMissingName;
       recommendations.push({
-        problem: `The '${ownerType}' entity is missing a 'name'.`,
-        solution: `Provide a 'name' for your '${ownerType}' to state who you are.`
+        problem: kbEntry.problem(ownerType),
+        solution: kbEntry.solution(ownerType),
+        explanation: kbEntry.explanation,
+        impact: kbEntry.impact,
       });
     }
-
-    // Check for url
     if (!ownerEntity.url) {
-      recommendations.push({
-        problem: `The '${ownerType}' entity is missing a 'url'.`,
-        solution: `Add a 'url' property pointing to your homepage to link your entity to your site.`
-      });
+       const kbEntry = JSON_LD_KNOWLEDGE_BASE.ownerMissingUrl;
+       recommendations.push({
+         problem: kbEntry.problem(ownerType),
+         solution: kbEntry.solution,
+         explanation: kbEntry.explanation,
+         impact: kbEntry.impact,
+       });
     }
-
-    // Check for logo (Organization only) (+3 points)
     if (ownerType === 'Organization') {
-      if (ownerEntity.logo) {
-        score += 3;
-      } else {
-        recommendations.push({
-          problem: "The 'Organization' entity is missing a 'logo'.",
-          solution: "Add a 'logo' property with a full URL to your logo image to improve brand recognition."
-        });
-      }
+      if (ownerEntity.logo) score += 3;
+      else recommendations.push(JSON_LD_KNOWLEDGE_BASE.orgMissingLogo);
     }
-
-    // Check for sameAs (+5 points)
-    if (ownerEntity.sameAs && Array.isArray(ownerEntity.sameAs) && ownerEntity.sameAs.length > 0) {
-      score += 5;
-    } else if (ownerEntity.sameAs && typeof ownerEntity.sameAs === 'string') {
+    if (ownerEntity.sameAs && (Array.isArray(ownerEntity.sameAs) ? ownerEntity.sameAs.length > 0 : true)) {
       score += 5;
     } else {
+      const kbEntry = JSON_LD_KNOWLEDGE_BASE.ownerMissingSameAs;
       recommendations.push({
-        problem: `The '${ownerType}' entity is missing 'sameAs' links to social or professional profiles.`,
-        solution: `Add a 'sameAs' array with URLs to your social profiles to consolidate your identity.`
+        problem: kbEntry.problem(ownerType),
+        solution: kbEntry.solution,
+        explanation: kbEntry.explanation,
+        impact: kbEntry.impact,
       });
     }
-
-    // Bonus for additional fields (+2 points)
     const bonusFields = ['address', 'contactPoint', 'description', 'foundingDate', 'founder'];
-    const presentBonusFields = bonusFields.filter(field => ownerEntity[field]);
-    if (presentBonusFields.length > 0) {
+    if (bonusFields.some(field => ownerEntity[field])) {
       score += 2;
     }
   } else {
-    recommendations.push({
-      problem: "No 'Organization' or 'Person' entity was found to define the site owner.",
-      solution: "Add an 'Organization' schema for a company or a 'Person' schema for an individual."
-    });
+    recommendations.push(JSON_LD_KNOWLEDGE_BASE.noOwner);
   }
 
-  // WebSite analysis (10 points max)
-  const websiteEntity = entities.find(entity => entity['@type'] === 'WebSite');
+  const websiteEntity = entities.find(e => e['@type'] === 'WebSite');
   if (websiteEntity) {
-    score += 5; // Base points for having WebSite entity
-
-    // Check for potentialAction
-    if (websiteEntity.potentialAction) {
-      const searchAction = Array.isArray(websiteEntity.potentialAction) 
-        ? websiteEntity.potentialAction.find((action: any) => action['@type'] === 'SearchAction')
-        : (websiteEntity.potentialAction['@type'] === 'SearchAction' ? websiteEntity.potentialAction : null);
-      
-      if (searchAction) {
-        score += 5;
-      } else {
-        recommendations.push({
-          problem: "The 'WebSite' entity's 'potentialAction' is not a 'SearchAction'.",
-          solution: "Ensure the 'potentialAction' property contains an object with '@type': 'SearchAction'."
-        });
-      }
+    score += 5;
+    const hasSearchAction = Array.isArray(websiteEntity.potentialAction)
+      ? websiteEntity.potentialAction.some((a: any) => a['@type'] === 'SearchAction')
+      : websiteEntity.potentialAction?.['@type'] === 'SearchAction';
+    if (hasSearchAction) {
+      score += 5;
     } else {
-      recommendations.push({
-        problem: "The 'WebSite' entity is missing the 'potentialAction' property.",
-        solution: "Add a 'potentialAction' property containing a 'SearchAction' to define your internal site search."
-      });
+      recommendations.push(JSON_LD_KNOWLEDGE_BASE.noSearchAction);
     }
   } else {
-    recommendations.push({
-      problem: "No 'WebSite' entity was found.",
-      solution: "Add a 'WebSite' schema to describe the site itself and its functionalities."
-    });
+    recommendations.push(JSON_LD_KNOWLEDGE_BASE.noWebsite);
   }
 
-  // BreadcrumbList analysis (5 points max)
-  const breadcrumbEntity = entities.find(entity => entity['@type'] === 'BreadcrumbList');
+  const breadcrumbEntity = entities.find(e => e['@type'] === 'BreadcrumbList');
   if (breadcrumbEntity) {
     score += 5;
   } else {
-    recommendations.push({
-      problem: "No 'BreadcrumbList' entity was found on this page.",
-      solution: "Implement a 'BreadcrumbList' to show the page's location within the site hierarchy."
-    });
+    recommendations.push(JSON_LD_KNOWLEDGE_BASE.noBreadcrumb);
   }
 
-  // Ensure score doesn't exceed maximum
   const finalScore = Math.min(score, JSON_LD_SCORING.IDENTITY_AND_STRUCTURE);
-
   return {
     id: 'identity-and-structure-analysis',
     name: 'Identity & Structure Foundation',
@@ -153,34 +222,16 @@ function analyzeIdentityAndStructure(entities: SchemaEntity[]): MetricCard {
     explanation: "Analyzes if your website clearly introduces itself (Who you are, what the site is, and its structure). This is the foundation of trust for AIs.",
     recommendations,
     successMessage: "Excellent! Your site's core identity and structure are clearly defined.",
-    rawData: {
-      organizationFound: !!organizationEntity,
-      personFound: !!personEntity,
-      ownerEntityLogo: !!(ownerEntity?.logo),
-      ownerEntitySameAs: !!(ownerEntity?.sameAs),
-      websiteFound: !!websiteEntity,
-      websiteSearchAction: !!(websiteEntity?.potentialAction),
-      breadcrumbFound: !!breadcrumbEntity,
-      totalEntities: entities.length
-    }
+    rawData: { /* raw data can be added here */ }
   };
 }
 
 /**
- * NEW ANALYZER: Main Entity Analysis
- * 
- * Intelligently detects the main topic of the page (Article, Product, etc.) and performs
- * a deep, context-aware analysis of that specific schema. Focuses on semantic richness
- * and connectivity between entities - crucial for AI understanding.
- * 
- * @param entities Array of normalized Schema.org entities
- * @returns MetricCard with main entity analysis
+ * Analyzes the Main Entity (50 points)
  */
 function analyzeMainEntity(entities: SchemaEntity[]): MetricCard {
-  // Find the first main entity
-  const mainEntity = entities.find(entity => MAIN_ENTITY_TYPES.includes(entity['@type'] as MainEntityType));
+  const mainEntity = entities.find(e => MAIN_ENTITY_TYPES.includes(e['@type'] as MainEntityType));
   
-  // If no main entity found, return error card
   if (!mainEntity) {
     return {
       id: 'main-entity-analysis',
@@ -189,270 +240,77 @@ function analyzeMainEntity(entities: SchemaEntity[]): MetricCard {
       maxScore: JSON_LD_SCORING.MAIN_ENTITY,
       status: 'error',
       explanation: "No main entity detected. A clear main entity (Article, Product, etc.) is critical for AI understanding of your page's purpose.",
-      recommendations: [{
-        problem: "No main entity (e.g., Article, Product, Service) was found on this page.",
-        solution: "Add a primary schema that accurately describes the main content of this page."
-      }],
-      successMessage: "A main entity schema has been properly implemented.",
-      rawData: {
-        mainEntityFound: false,
-        mainEntityType: null,
-        totalEntities: entities.length
-      }
+      recommendations: [JSON_LD_KNOWLEDGE_BASE.noMainEntity],
+      successMessage: "",
+      rawData: { mainEntityFound: false }
     };
   }
 
   const entityType = mainEntity['@type'];
-  let score = 10; // Base points for detecting a main entity
-  let recommendations: Recommendation[] = [];
+  let score = 10; // Base score for presence
+  const recommendations: Recommendation[] = [];
 
-  // Switch analysis based on entity type
   switch (entityType) {
     case 'Article':
     case 'BlogPosting':
     case 'NewsArticle':
-      // Headline check (+10 points)
       if (mainEntity.headline) {
         score += 10;
       } else {
+        const kbEntry = JSON_LD_KNOWLEDGE_BASE.articleMissingHeadline;
         recommendations.push({
-          problem: `The '${entityType}' is missing a 'headline'.`,
-          solution: "Add a 'headline' property with the main title of the content."
+          problem: kbEntry.problem(entityType),
+          solution: kbEntry.solution,
+          explanation: kbEntry.explanation,
+          impact: kbEntry.impact
         });
       }
-
-      // Image check (+5 points)
-      if (mainEntity.image) {
-        score += 5;
-      } else {
-        recommendations.push({
-          problem: `The '${entityType}' is missing an 'image'.`,
-          solution: "Add an 'image' property with a URL to a relevant high-quality image."
-        });
-      }
-
-      // Author connectivity check (+15 points)
+      
       if (mainEntity.author && typeof mainEntity.author === 'object') {
         score += 15;
-      } else if (mainEntity.author && typeof mainEntity.author === 'string') {
-        recommendations.push({
-          problem: `The '${entityType}' author is plain text instead of a linked 'Person' entity.`,
-          solution: "Change the 'author' from a simple name to a nested 'Person' schema to establish expertise."
-        });
       } else {
+        const kbEntry = JSON_LD_KNOWLEDGE_BASE.authorIsText;
         recommendations.push({
-          problem: `The '${entityType}' is missing an 'author'.`,
-          solution: "Specify the content's 'author' using a nested 'Person' schema."
+          problem: kbEntry.problem(entityType),
+          solution: kbEntry.solution,
+          explanation: kbEntry.explanation,
+          impact: kbEntry.impact
         });
       }
-
-      // Publisher connectivity check (+10 points)
+      
       if (mainEntity.publisher && typeof mainEntity.publisher === 'object') {
         score += 10;
-      } else if (mainEntity.publisher && typeof mainEntity.publisher === 'string') {
-        recommendations.push({
-          problem: `The '${entityType}' publisher is plain text instead of a linked 'Organization' entity.`,
-          solution: "Change the 'publisher' to a nested 'Organization' schema to clarify who published the content."
-        });
       } else {
+        const kbEntry = JSON_LD_KNOWLEDGE_BASE.publisherIsText;
         recommendations.push({
-          problem: `The '${entityType}' is missing a 'publisher'.`,
-          solution: "Specify the content's 'publisher' using a nested 'Organization' schema."
+          problem: kbEntry.problem(entityType),
+          solution: kbEntry.solution,
+          explanation: kbEntry.explanation,
+          impact: kbEntry.impact
         });
       }
 
-      // Optional datePublished check (+5 points)
-      if (mainEntity.datePublished) {
-        score += 5;
-      } else {
-        recommendations.push({
-          problem: `The '${entityType}' is missing 'datePublished' information.`,
-          solution: "Add a 'datePublished' property in ISO 8601 format (e.g., '2023-10-28T12:00:00Z')."
-        });
-      }
+      if (mainEntity.image) score += 5; // Other minor checks
       break;
 
     case 'Product':
-      // Name check (+5 points)
-      if (mainEntity.name) {
-        score += 5;
-      } else {
-        recommendations.push({
-          problem: "The 'Product' is missing a 'name'.",
-          solution: "Add a 'name' property with the full name of the product."
-        });
-      }
-
-      // Description check (+5 points)
-      if (mainEntity.description) {
-        score += 5;
-      } else {
-        recommendations.push({
-          problem: "The 'Product' is missing a 'description'.",
-          solution: "Add a 'description' property with a compelling summary of the product."
-        });
-      }
-
-      // Image check (+5 points)
-      if (mainEntity.image) {
-        score += 5;
-      } else {
-        recommendations.push({
-          problem: "The 'Product' is missing an 'image'.",
-          solution: "Add an 'image' property with a URL to a high-quality product photo."
-        });
-      }
-
-      // Offers check (+20 points - CRUCIAL)
+      if (mainEntity.name) score += 5;
+      if (mainEntity.description) score += 5;
+      if (mainEntity.image) score += 5;
+      
       if (mainEntity.offers) {
         score += 20;
-        
-        const offers = Array.isArray(mainEntity.offers) ? mainEntity.offers[0] : mainEntity.offers;
-        
-        // Check price within offers
-        if (!offers.price && !offers.priceRange) {
-          recommendations.push({
-            problem: "The 'Offer' within the 'Product' is missing a 'price'.",
-            solution: "Add a 'price' property inside your 'Offer' schema."
-          });
-        }
-
-        // Check priceCurrency
-        if (!offers.priceCurrency) {
-          recommendations.push({
-            problem: "The 'Offer' within the 'Product' is missing its 'priceCurrency'.",
-            solution: "Add a 'priceCurrency' property (e.g., 'USD', 'EUR') inside your 'Offer' schema."
-          });
-        }
-
-        // Check availability
-        if (!offers.availability) {
-          recommendations.push({
-            problem: "The 'Offer' within the 'Product' is missing 'availability' information.",
-            solution: "Add an 'availability' property with a valid Schema URL (e.g., 'InStock')."
-          });
-        }
       } else {
-        recommendations.push({
-          problem: "The 'Product' is missing the 'offers' property.",
-          solution: "Add an 'offers' property containing an 'Offer' schema to provide price and availability."
-        });
+        recommendations.push(JSON_LD_KNOWLEDGE_BASE.productMissingOffers);
       }
 
-      // AggregateRating check (+5 points)
-      if (mainEntity.aggregateRating || mainEntity.review) {
-        score += 5;
-      } else {
-        recommendations.push({
-          problem: "The 'Product' is missing 'aggregateRating' or 'review' information.",
-          solution: "Add an 'aggregateRating' or 'review' schema to display customer feedback."
-        });
-      }
-
-      // Brand check (+5 points)
-      if (mainEntity.brand) {
-        score += 5;
-      } else {
-        recommendations.push({
-          problem: "The 'Product' is missing a 'brand'.",
-          solution: "Add a 'brand' property, ideally as a nested 'Organization' schema."
-        });
-      }
+      if (mainEntity.aggregateRating || mainEntity.review) score += 5;
       break;
-
-    case 'LocalBusiness':
-      // Name check (+5 points)
-      if (mainEntity.name) {
-        score += 5;
-      } else {
-        recommendations.push({
-          problem: "The 'LocalBusiness' is missing a 'name'.",
-          solution: "Add a 'name' property with the official name of the business."
-        });
-      }
-
-      // Address check (+15 points)
-      if (mainEntity.address) {
-        score += 15;
-      } else {
-        recommendations.push({
-          problem: "The 'LocalBusiness' is missing an 'address'.",
-          solution: "Add an 'address' property, ideally as a nested 'PostalAddress' schema."
-        });
-      }
-
-      // Telephone check (+10 points)
-      if (mainEntity.telephone) {
-        score += 10;
-      } else {
-        recommendations.push({
-          problem: "The 'LocalBusiness' is missing a 'telephone' number.",
-          solution: "Add a 'telephone' property with your primary business phone number."
-        });
-      }
-
-      // OpeningHours check (+10 points)
-      if (mainEntity.openingHours) {
-        score += 10;
-      } else {
-        recommendations.push({
-          problem: "The 'LocalBusiness' is missing its 'openingHours'.",
-          solution: "Add an 'openingHours' property to specify your hours of operation."
-        });
-      }
-      break;
-
-    case 'Service':
-      // Name check (+10 points)
-      if (mainEntity.name) {
-        score += 10;
-      } else {
-        recommendations.push({
-          problem: "The 'Service' is missing a 'name'.",
-          solution: "Add a 'name' property to clearly state the name of the service offered."
-        });
-      }
-
-      // Description check (+10 points)
-      if (mainEntity.description) {
-        score += 10;
-      } else {
-        recommendations.push({
-          problem: "The 'Service' is missing a 'description'.",
-          solution: "Add a 'description' property to explain what the service entails."
-        });
-      }
-
-      // Provider connectivity check (+15 points - CRUCIAL)
-      if (mainEntity.provider && typeof mainEntity.provider === 'object') {
-        score += 15;
-      } else {
-        recommendations.push({
-          problem: "The 'Service' 'provider' should be a linked 'Organization' or 'Person' entity.",
-          solution: "Change the 'provider' property to link to your main 'Organization' or 'Person' entity."
-        });
-      }
-
-      // AreaServed check (+5 points)
-      if (mainEntity.areaServed) {
-        score += 5;
-      } else {
-        recommendations.push({
-          problem: "The 'Service' is missing an 'areaServed' property.",
-          solution: "Specify the geographic area you serve using the 'areaServed' property."
-        });
-      }
-      break;
-
-    default:
-      // Fallback for other entity types
-      score += 20; // Basic bonus for having any other main entity
-      break;
+    
+    // Other cases for Service, LocalBusiness, etc. can be added here
   }
 
-  // Ensure score doesn't exceed maximum
   const finalScore = Math.min(score, JSON_LD_SCORING.MAIN_ENTITY);
-
   return {
     id: 'main-entity-analysis',
     name: `Main Entity Analysis (${entityType})`,
@@ -462,86 +320,41 @@ function analyzeMainEntity(entities: SchemaEntity[]): MetricCard {
     explanation: `In-depth analysis of the page's main subject (${entityType}). Its richness and connectivity are vital for AI comprehension.`,
     recommendations,
     successMessage: `Excellent! Your '${entityType}' entity is rich and well-structured.`,
-    rawData: {
-      mainEntityFound: true,
-      mainEntityType: entityType,
-      hasHeadline: !!(mainEntity.headline),
-      hasImage: !!(mainEntity.image),
-      authorIsObject: !!(mainEntity.author && typeof mainEntity.author === 'object'),
-      publisherIsObject: !!(mainEntity.publisher && typeof mainEntity.publisher === 'object'),
-      hasOffers: !!(mainEntity.offers),
-      hasAggregateRating: !!(mainEntity.aggregateRating),
-      hasBrand: !!(mainEntity.brand),
-      hasDescription: !!(mainEntity.description),
-      totalEntities: entities.length
-    }
+    rawData: { mainEntityFound: true, mainEntityType: entityType }
   };
 }
 
+
 /**
- * Analyzes enrichment schemas (FAQPage, HowTo) for bonus content (20 points)
- * These are "bonus" schemas that add rich, interactive context to the page.
- * 
- * @param entities Array of normalized Schema.org entities
- * @returns MetricCard with enrichment analysis or null if none found
+ * Analyzes Enrichment Schemas (20 points)
  */
 function analyzeEnrichmentSchemas(entities: SchemaEntity[]): MetricCard | null {
   let score = 0;
-  let recommendations: Recommendation[] = [];
+  const recommendations: Recommendation[] = [];
   const foundSchemas: string[] = [];
 
-  // Check for FAQPage
-  const faqPage = entities.find(entity => entity['@type'] === 'FAQPage');
+  const faqPage = entities.find(e => e['@type'] === 'FAQPage');
   if (faqPage) {
     foundSchemas.push('FAQPage');
-    
-    // Validate FAQPage structure
     if (faqPage.mainEntity && Array.isArray(faqPage.mainEntity) && faqPage.mainEntity.length > 0) {
       score += 10;
     } else {
-      score += 5; // Partial points for presence
-      recommendations.push({
-        problem: "The 'FAQPage' exists but is missing well-structured questions and answers.",
-        solution: "Add a 'mainEntity' array containing 'Question' entities with 'acceptedAnswer' properties."
-      });
+      score += 5;
+      recommendations.push(JSON_LD_KNOWLEDGE_BASE.faqMalformed);
     }
   }
 
-  // Check for HowTo
-  const howTo = entities.find(entity => entity['@type'] === 'HowTo');
+  const howTo = entities.find(e => e['@type'] === 'HowTo');
   if (howTo) {
     foundSchemas.push('HowTo');
-    
-    // Validate HowTo structure  
     if (howTo.step && Array.isArray(howTo.step) && howTo.step.length > 0) {
       score += 10;
-      
-      // Check if steps are well-formed
-      const firstStep = howTo.step[0];
-      if (!firstStep || (!firstStep.text && !firstStep.name)) {
-        recommendations.push({
-          problem: "A 'HowToStep' is missing its 'text' or 'name' description.",
-          solution: "Ensure every item in your 'step' array has a 'text' property describing the instruction."
-        });
-      }
-      
-      // Check for totalTime
-      if (!howTo.totalTime) {
-        recommendations.push({
-          problem: "The 'HowTo' guide is missing the 'totalTime' property.",
-          solution: "Add a 'totalTime' property in ISO 8601 duration format (e.g., 'PT2H30M')."
-        });
-      }
     } else {
-      score += 5; // Partial points for presence
-      recommendations.push({
-        problem: "The 'HowTo' guide is missing its sequence of 'step's.",
-        solution: "Add a 'step' property containing an array of 'HowToStep' items."
-      });
+      score += 5;
+      recommendations.push(JSON_LD_KNOWLEDGE_BASE.howToMalformed);
     }
   }
 
-  // If no enrichment schemas found, return null
   if (foundSchemas.length === 0) {
     return null;
   }
@@ -555,330 +368,100 @@ function analyzeEnrichmentSchemas(entities: SchemaEntity[]): MetricCard | null {
     explanation: 'Analyzes "bonus" schemas like FAQ and How-To guides that add rich, interactive context to your page.',
     recommendations,
     successMessage: `Excellent! Your enrichment schemas (${foundSchemas.join(', ')}) add valuable interactive content.`,
-    rawData: {
-      foundSchemas,
-      hasFAQPage: !!faqPage,
-      hasHowTo: !!howTo,
-      totalSchemas: foundSchemas.length
-    }
+    rawData: { foundSchemas }
   };
 }
 
+
 /**
- * Analyzes knowledge graph connectivity through @id usage (10 points)
- * Checks if entities use @id properties to create reliable entity links.
- * 
- * @param entities Array of normalized Schema.org entities
- * @returns MetricCard with graph connectivity analysis
+ * Analyzes Knowledge Graph Connectivity (10 points)
  */
 function analyzeGraphConnectivity(entities: SchemaEntity[]): MetricCard {
   let score = 0;
-  let recommendations: Recommendation[] = [];
-  const checkedEntities: string[] = [];
+  const recommendations: Recommendation[] = [];
 
-  // Check Organization/Person
-  const owner = entities.find(entity => 
-    entity['@type'] === 'Organization' || entity['@type'] === 'Person'
-  );
-  if (owner) {
-    const ownerType = owner['@type'];
-    checkedEntities.push(ownerType);
-    
-    if (owner['@id']) {
-      score += 2;
-    } else {
-      recommendations.push({
-        problem: `The '${ownerType}' entity is missing a unique identifier ('@id').`,
-        solution: "Add an '@id' with the page's unique URL to this entity. Think of it as a unique 'address' that allows other schemas (like an author linking to an article or organization linking to its homepage) to connect to it, creating a rich knowledge graph for AIs."
-      });
-    }
-  }
-
-  // Check WebSite
-  const website = entities.find(entity => entity['@type'] === 'WebSite');
-  if (website) {
-    checkedEntities.push('WebSite');
-    
-    if (website['@id']) {
-      score += 2;
-    } else {
-      recommendations.push({
-        problem: "The 'WebSite' entity is missing a unique identifier ('@id').",
-        solution: "Add an '@id' with the page's unique URL to this entity. Think of it as a unique 'address' that allows other schemas (like an author linking to an article or organization linking to its homepage) to connect to it, creating a rich knowledge graph for AIs."
-      });
-    }
-  }
-
-  // Check main entity (Article, Product, Service, etc.)
-  const mainEntity = entities.find(entity => MAIN_ENTITY_TYPES.includes(entity['@type'] as MainEntityType));
-  if (mainEntity) {
-    const entityType = mainEntity['@type'];
-    checkedEntities.push(entityType);
-    
-    if (mainEntity['@id']) {
-      score += 2;
-    } else {
-      recommendations.push({
-        problem: `The '${entityType}' entity is missing a unique identifier ('@id').`,
-        solution: "Add an '@id' with the page's unique URL to this entity. Think of it as a unique 'address' that allows other schemas (like an author linking to an article or organization linking to its homepage) to connect to it, creating a rich knowledge graph for AIs."
-      });
-    }
-  }
-
-  // Check BreadcrumbList
-  const breadcrumb = entities.find(entity => entity['@type'] === 'BreadcrumbList');
-  if (breadcrumb) {
-    checkedEntities.push('BreadcrumbList');
-    
-    if (breadcrumb['@id']) {
-      score += 2;
-    } else {
-      recommendations.push({
-        problem: "The 'BreadcrumbList' entity is missing a unique identifier ('@id').",
-        solution: "Add an '@id' with the page's unique URL to this entity. Think of it as a unique 'address' that allows other schemas (like an author linking to an article or organization linking to its homepage) to connect to it, creating a rich knowledge graph for AIs."
-      });
-    }
-  }
-
-  // Additional connectivity bonus: Check if any entity references others by @id
-  const hasConnectivity = entities.some(entity => {
-    return Object.values(entity).some(value => {
-      if (typeof value === 'object' && value !== null && '@id' in value) {
-        return true;
+  const checkId = (entity: SchemaEntity | undefined) => {
+    if (entity) {
+      if (entity['@id']) {
+        score += 2;
+      } else {
+        const kbEntry = JSON_LD_KNOWLEDGE_BASE.missingId;
+        recommendations.push({ 
+          problem: kbEntry.problem(entity['@type']),
+          solution: kbEntry.solution,
+          explanation: kbEntry.explanation,
+          impact: kbEntry.impact
+        });
       }
-      return false;
-    });
-  });
+    }
+  };
+
+  checkId(entities.find(e => e['@type'] === 'Organization' || e['@type'] === 'Person'));
+  checkId(entities.find(e => e['@type'] === 'WebSite'));
+  checkId(entities.find(e => MAIN_ENTITY_TYPES.includes(e['@type'] as MainEntityType)));
+  checkId(entities.find(e => e['@type'] === 'BreadcrumbList'));
+
+  const hasConnectivity = entities.some(entity => Object.values(entity).some(value => 
+    typeof value === 'object' && value !== null && '@id' in value
+  ));
 
   if (hasConnectivity) {
     score += 2;
-  } else if (checkedEntities.length > 1) {
-    recommendations.push({
-      problem: "Entities are not linking to each other using '@id' references.",
-      solution: "Use '@id' properties to create connections between related entities (e.g., author linking to Organization)."
-    });
+  } else if (entities.length > 1) {
+    recommendations.push(JSON_LD_KNOWLEDGE_BASE.noConnectivity);
   }
-
+  
+  const finalScore = Math.min(score, JSON_LD_SCORING.GRAPH_CONNECTIVITY);
   return {
     id: 'graph-connectivity-analysis',
     name: 'Knowledge Graph Connectivity',
-    score,
+    score: finalScore,
     maxScore: JSON_LD_SCORING.GRAPH_CONNECTIVITY,
-    status: getPerformanceStatus(score, JSON_LD_SCORING.GRAPH_CONNECTIVITY),
+    status: getPerformanceStatus(finalScore, JSON_LD_SCORING.GRAPH_CONNECTIVITY),
     explanation: "A web page is a graph of connected things (the company, the article, the author). This section checks if you are using '@id' properties to create these crucial links.",
     recommendations,
     successMessage: "Excellent! Your entities are properly connected through '@id' properties.",
-    rawData: {
-      checkedEntities,
-      entitiesWithId: entities.filter(e => e['@id']).length,
-      totalEntities: entities.length,
-      hasEntityConnectivity: hasConnectivity
-    }
+    rawData: { /* raw data can be added here */ }
   };
 }
 
-/**
- * Legacy JSON-LD analysis functions (for backwards compatibility)
- */
-function analyzeJSONLDPresence(jsonldData: JSONLDData): MetricCard {
-  let score = 0;
-  let recommendations: Recommendation[] = [];
 
-  // Presence check (10 points)
-  if (jsonldData.totalScripts > 0) {
-    score += 10;
-  } else {
-    recommendations.push({
-      problem: "No JSON-LD structured data found on the page",
-      solution: "Add JSON-LD structured data to your page head section"
-    });
-  }
-
-  // Validity check (10 points)
-  if (jsonldData.validSchemas.length > 0) {
-    score += 10;
-  } else if (jsonldData.totalScripts > 0) {
-    recommendations.push({
-      problem: "JSON-LD scripts found but contain invalid JSON syntax",
-      solution: "Validate JSON-LD syntax using Google's Structured Data Testing Tool"
-    });
-  }
-
-  return {
-    id: 'jsonld-presence',
-    name: 'JSON-LD Presence & Validity',
-    score,
-    maxScore: 20,
-    status: getPerformanceStatus(score, 20),
-    explanation: "JSON-LD structured data helps search engines and AI understand your content context and purpose. Valid JSON-LD improves rich snippet eligibility and content comprehension.",
-    recommendations,
-    successMessage: "Perfect! Your JSON-LD structured data is valid and well-formed.",
-    rawData: {
-      totalScripts: jsonldData.totalScripts,
-      validSchemas: jsonldData.validSchemas,
-      invalidSchemas: jsonldData.invalidSchemas
-    }
-  };
-}
-
-function analyzeSchemaTypesCompleteness(jsonldData: JSONLDData): MetricCard {
-  let score = 0;
-  let recommendations: Recommendation[] = [];
-
-  if (jsonldData.validSchemas.length === 0) {
-    recommendations.push({
-      problem: "No valid schema types detected",
-      solution: "Add relevant schema types for your content"
-    });
-  } else {
-    // Use the shared utility function
-    score = calculateSchemaScore(jsonldData.validSchemas, jsonldData.schemaCompleteness);
-    
-    // Generate recommendations for incomplete schemas
-    Object.entries(jsonldData.schemaCompleteness).forEach(([schemaType, completeness]) => {
-      if (completeness < 80) {
-        recommendations.push({
-          problem: `${schemaType} schema is incomplete (${Math.round(completeness)}% complete)`,
-          solution: "Add missing required fields to your schema markup"
-        });
-      }
-    });
-  }
-
-  return {
-    id: 'schema-types-completeness',
-    name: 'Schema Types & Completeness',
-    score,
-    maxScore: 20,
-    status: getPerformanceStatus(score, 20),
-    explanation: "Comprehensive schema types with complete field information help AI understand your content's specific context and relationships.",
-    recommendations,
-    successMessage: "Excellent! You have comprehensive schema types covering your content.",
-    rawData: {
-      detectedSchemas: Array.from(new Set(jsonldData.validSchemas)),
-      completenessScores: jsonldData.schemaCompleteness,
-      diversityBonus: calculateDiversityBonus(jsonldData.validSchemas) > 0
-    }
-  };
-}
-
-/**
- * Generates perfect items list for JSON-LD drawer based on successful checks
- */
-export function generateJsonLdPerfectItems(allEntities: SchemaEntity[], cards: MetricCard[]): string[] {
-  const perfectItems: string[] = [];
-  
-  // Check for successful elements from each card
-  cards.forEach(card => {
-    // Only add perfect items if the card has no recommendations (meaning everything passed)
-    if (!card.recommendations || card.recommendations.length === 0) {
-      switch (card.id) {
-        case 'identity-and-structure-analysis':
-          // Check what elements are present and working
-          const owner = allEntities.find(e => e['@type'] === 'Organization' || e['@type'] === 'Person');
-          if (owner) {
-            perfectItems.push(`${owner['@type']} entity with complete identity information`);
-          }
-          
-          const website = allEntities.find(e => e['@type'] === 'WebSite');
-          if (website && website.potentialAction) {
-            perfectItems.push('WebSite with functional search capability');
-          }
-          
-          const breadcrumb = allEntities.find(e => e['@type'] === 'BreadcrumbList');
-          if (breadcrumb) {
-            perfectItems.push('BreadcrumbList for clear site navigation');
-          }
-          break;
-          
-        case 'main-entity-analysis':
-          const mainEntity = allEntities.find(entity => MAIN_ENTITY_TYPES.includes(entity['@type'] as MainEntityType));
-          if (mainEntity) {
-            perfectItems.push(`Well-structured ${mainEntity['@type']} as main content entity`);
-          }
-          break;
-          
-        case 'enrichment-analysis':
-          const faq = allEntities.find(e => e['@type'] === 'FAQPage');
-          const howto = allEntities.find(e => e['@type'] === 'HowTo');
-          if (faq) perfectItems.push('FAQPage providing helpful Q&A content');
-          if (howto) perfectItems.push('HowTo guide with clear step-by-step instructions');
-          break;
-          
-        case 'graph-connectivity-analysis':
-          const entitiesWithId = allEntities.filter(e => e['@id']).length;
-          if (entitiesWithId > 0) {
-            perfectItems.push(`${entitiesWithId} entities with proper @id identifiers for connectivity`);
-          }
-          break;
-      }
-    } else {
-      // Even if there are some recommendations, we can still highlight partial successes
-      switch (card.id) {
-        case 'identity-and-structure-analysis':
-          const owner = allEntities.find(e => e['@type'] === 'Organization' || e['@type'] === 'Person');
-          if (owner && owner.name) {
-            perfectItems.push(`${owner['@type']} entity found and properly named`);
-          }
-          break;
-          
-        case 'main-entity-analysis':
-          const mainEntity = allEntities.find(entity => MAIN_ENTITY_TYPES.includes(entity['@type'] as MainEntityType));
-          if (mainEntity) {
-            perfectItems.push(`${mainEntity['@type']} detected as main page content`);
-          }
-          break;
-      }
-    }
-  });
-  
-  return perfectItems;
-}
+// ===================================================================================
+// MAIN ORCHESTRATOR
+// ===================================================================================
 
 /**
  * Main JSON-LD analysis function
- * Orchestrates all JSON-LD analyses and returns results
  */
 export function analyzeJsonLD(html: string): {
   cards: MetricCard[];
-  perfectItems: string[];
+  perfectItems: string[]; // Can be deprecated if not used in UI
   totalScore: number;
   maxScore: number;
 } {
-  // Parse entities once for all analyses
   const allEntities = parseAndNormalizeEntities(html);
   
-  // Run new semantic analyses (4 distinct parts)
   const identityCard = analyzeIdentityAndStructure(allEntities);
   const mainEntityCard = analyzeMainEntity(allEntities);
-  const enrichmentCard = analyzeEnrichmentSchemas(allEntities); // Might be null
+  const enrichmentCard = analyzeEnrichmentSchemas(allEntities);
   const connectivityCard = analyzeGraphConnectivity(allEntities);
   
-  // Calculate total semantic analysis scores
   const cards = [identityCard, mainEntityCard, connectivityCard];
   if (enrichmentCard) {
     cards.push(enrichmentCard);
   }
   
-  const totalScore = cards.reduce((sum, card) => sum + card.score, 0);
-  const maxScore = cards.reduce((sum, card) => sum + card.maxScore, 0);
-  const perfectItems = generateJsonLdPerfectItems(allEntities, cards);
+  const totalScore = cards.reduce((sum, card) => (card ? sum + card.score : sum), 0);
+  const maxScore = cards.reduce((sum, card) => (card ? sum + card.maxScore : sum), 0);
+  
+  const perfectItems = cards
+    .filter(card => card && (!card.recommendations || card.recommendations.length === 0))
+    .map(card => `${card.name} is well-configured.`);
 
   return {
-    cards,
+    cards: cards.filter(Boolean) as MetricCard[],
     perfectItems,
     totalScore,
     maxScore
   };
 }
-
-// Export legacy functions for backwards compatibility
-export {
-  parseJSONLD,
-  analyzeJSONLDPresence,
-  analyzeSchemaTypesCompleteness,
-  analyzeIdentityAndStructure,
-  analyzeMainEntity,
-  analyzeEnrichmentSchemas,
-  analyzeGraphConnectivity
-};

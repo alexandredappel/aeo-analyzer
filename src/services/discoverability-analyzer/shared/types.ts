@@ -31,7 +31,7 @@ export interface CollectedData {
     error?: string;
     data?: string;
   };
-  llmTxt?: {
+  llmsTxt?: {
     success: boolean;
     data?: string;
     error?: string;

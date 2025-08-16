@@ -23,13 +23,13 @@ const CONTENT_HIERARCHY_KNOWLEDGE_BASE = {
     problem: "No H1 tag was found on this page.",
     solution: "Add a single, unique <h1> tag that represents the main, descriptive title of your page.",
     explanation: "The unique <h1> is the strongest signal for an AI about the page's main topic. Its absence forces the AI to 'guess' the theme, which can seriously harm its ability to classify and summarize your content.",
-    impact: 10
+    impact: 9
   },
   multipleH1Found: {
     problem: (count: number, texts: string[]) => `Multiple H1 tags (total: ${count}) were found, creating confusion about the main topic. Found H1 texts: "${texts.join('", "')}"`,
     solution: "Keep only the most relevant <h1> tag as the unique main title and convert the others to <h2> tags or a lower level.",
     explanation: "Having multiple <h1> tags sends conflicting signals to an AI about the page's primary subject, which can lead to an incorrect synthesis of the information.",
-    impact: 10
+    impact: 9
   },
   headingSequenceBreak: {
     problem: (parentTag: string, childTag: string) => `The heading hierarchy is not sequential. A <${parentTag}> tag is directly followed by a <${childTag}> tag, where an intermediate level is expected.`,

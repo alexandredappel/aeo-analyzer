@@ -44,7 +44,7 @@ const CONTENT_ACCESSIBILITY_KNOWLEDGE_BASE = {
     problem: (count: number, percent: number) => `${count} images (${percent.toFixed(1)}%) are missing a descriptive 'alt' attribute.`,
     solution: "Add a descriptive 'alt' attribute to every <img> tag that conveys information.",
     explanation: "The 'alt' text is the primary way for an AI to understand the content of an image. Missing 'alt' tags create significant gaps in the AI's comprehension of your page.",
-    impact: 10
+    impact: 9
   }
 } as const;
 

@@ -26,7 +26,7 @@ const KNOWLEDGE_BASE = {
     problem: "The robots.txt file could not be found.",
     solution: "Create a robots.txt file at your domain's root to provide clear crawling instructions.",
     explanation: "While most bots crawl by default if this file is missing, its absence creates uncertainty and prevents you from setting important rules.",
-    impact: 5
+    impact: 10
   },
   allBotsBlocked: {
     problem: "The robots.txt file is blocking all major AI crawlers.",
@@ -38,13 +38,13 @@ const KNOWLEDGE_BASE = {
     problem: "The robots.txt file is blocking some AI crawlers: [blockedBotsList].",
     solution: "Review your robots.txt and add specific 'Allow' rules for the blocked bots to ensure full visibility.",
     explanation: "Blocking specific AIs prevents them from using your content, limiting your reach on their respective platforms.",
-    impact: 7
+    impact: 10
   },
   sitemapNotReferenced: {
     problem: "The sitemap.xml file is not referenced in your robots.txt.",
     solution: "Add a new line 'Sitemap: https://your-domain.com/sitemap.xml' to your robots.txt file.",
     explanation: "Providing the sitemap location in robots.txt is a strong, standardized signal that helps crawlers find your site's map immediately.",
-    impact: 4
+    impact: 7
   },
 
   // SITEMAP ISSUES

@@ -10,6 +10,7 @@ import {
   fetchStaticHTML,
   fetchRobotsTxt,
   fetchSitemap,
+  fetchLlmsTxt,
   extractBasicMetadata,
   AEOScoreCalculator,
   TIMEOUT_MS,
@@ -109,6 +110,7 @@ interface CollectedData {
   html: CrawlResult;
   robotsTxt: CrawlResult;
   sitemap: CrawlResult;
+  llmsTxt: CrawlResult;
 }
 
 interface AnalysisResults {
@@ -226,7 +228,7 @@ export async function POST(request: Request): Promise<Response> {
     responseLogger.info('Starting parallel data collection...');
     performanceTimer.startPhase('dataCollection');
     
-    const [htmlResult, robotsResult, sitemapResult] = await Promise.allSettled([
+    const [htmlResult, robotsResult, sitemapResult, llmsTxtResult] = await Promise.allSettled([
       (async () => {
         responseLogger.info('Fetching HTML content...');
         const result = await fetchStaticHTML(normalizedUrl.href);
@@ -258,6 +260,17 @@ export async function POST(request: Request): Promise<Response> {
           responseLogger.warn(`sitemap.xml collection failed: ${result.error}`);
         }
         return result;
+      })(),
+      
+      (async () => {
+        responseLogger.info('Fetching llms.txt...');
+        const result = await fetchLlmsTxt(normalizedUrl.href);
+        if (result.success) {
+          responseLogger.success(`llms.txt collected: ${result.metadata?.contentLength || 0} bytes`);
+        } else {
+          responseLogger.warn(`llms.txt collection failed: ${result.error}`);
+        }
+        return result;
       })()
     ]);
 
@@ -279,10 +292,16 @@ export async function POST(request: Request): Promise<Response> {
       error: sitemapResult.reason?.message || 'Unknown error',
       metadata: { responseTime: 0 }
     };
+    
+    const llmsTxtData: CrawlResult = llmsTxtResult.status === 'fulfilled' ? llmsTxtResult.value : { 
+      success: false, 
+      error: llmsTxtResult.reason?.message || 'Unknown error',
+      metadata: { responseTime: 0 }
+    };
 
     // Calculate success metrics
-    const successCount = [htmlData, robotsData, sitemapData].filter(result => result.success).length;
-    const totalCount = 3;
+    const successCount = [htmlData, robotsData, sitemapData, llmsTxtData].filter(result => result.success).length;
+    const totalCount = 4;
     const failureCount = totalCount - successCount;
     const partialSuccess = successCount > 0 && successCount < totalCount;
     
@@ -323,10 +342,11 @@ export async function POST(request: Request): Promise<Response> {
       url: normalizedUrl.href,
       html: htmlData,
       robotsTxt: robotsData,
-      sitemap: sitemapData
+      sitemap: sitemapData,
+      llmsTxt: llmsTxtData
     };
     
-    // Discoverability analysis can work with just URL, robots.txt, and sitemap
+    // Discoverability analysis can work with URL, robots.txt, sitemap, and llms.txt
     try {
       responseLogger.info('Starting discoverability analysis...');
       performanceTimer.startPhase('discoverability');

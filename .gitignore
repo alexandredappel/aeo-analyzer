@@ -56,3 +56,13 @@ DESIGN.md
 
 # Keep README.md tracked
 !README.md
+
+# Fichiers et dossiers exclus de la production
+CLAUDE.md
+IMPACT_BADGES_IMPLEMENTATION.md
+.windsurfrules
+
+# Dossiers complets exclus
+DOCUMENTATION/
+.cursor/
+.superdesign/

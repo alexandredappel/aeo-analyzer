@@ -3,17 +3,14 @@
 import { useSearchParams, useRouter } from "next/navigation";
 import { Suspense, useEffect, useRef } from "react";
 import { ReportLayout } from "@/components/layouts/ReportLayout";
-import { ErrorMessage, BackButton, AnalysisLogs, CollectionResults, LoadingSpinner } from "@/components/ui";
+import { ErrorMessage, BackButton, AnalysisLogs, CollectionResults, LoadingSpinner, AnalysisProgress } from "@/components/ui";
 import { useAnalysis } from "@/hooks/useAnalysis";
+import { HeroHeader } from "@/components/header";
+import { normalizeAndValidate } from "@/utils/url";
 
-// URL validation function
+// URL validation function (kept for compatibility if needed elsewhere)
 function isValidUrl(urlString: string): boolean {
-  try {
-    const url = new URL(urlString);
-    return url.protocol === 'http:' || url.protocol === 'https:';
-  } catch {
-    return false;
-  }
+  return !!normalizeAndValidate(urlString);
 }
 
 // Main report content component
@@ -46,9 +43,10 @@ function ReportContent() {
     if (urlParam && !hasAutoStarted.current && analysisState === 'idle') {
       try {
         const decodedUrl = decodeURIComponent(urlParam);
-        if (isValidUrl(decodedUrl)) {
+        const normalized = normalizeAndValidate(decodedUrl);
+        if (normalized) {
           hasAutoStarted.current = true;
-          startAnalysis(decodedUrl);
+          startAnalysis(normalized);
         }
       } catch {
         // Invalid URL encoding - will be handled by validation below
@@ -85,14 +83,15 @@ function ReportContent() {
     );
   }
 
-  // Validate URL format
-  if (!isValidUrl(decodedUrl)) {
+  // Normalize and validate URL format
+  const normalizedUrl = normalizeAndValidate(decodedUrl);
+  if (!normalizedUrl) {
     return (
       <div className="space-y-6">
         <BackButton onClick={handleBackToHome} />
         <ErrorMessage
           title="Invalid URL format provided"
-          message={`"${decodedUrl}" is not a valid URL. Please ensure the URL starts with http:// or https:// and is properly formatted.`}
+          message={`"${decodedUrl}" is not a valid URL. Please enter a full domain or page URL.`}
         />
       </div>
     );
@@ -100,7 +99,7 @@ function ReportContent() {
 
   // Handle analysis start (manual trigger)
   const handleStartAnalysis = () => {
-    startAnalysis(decodedUrl);
+    startAnalysis(normalizedUrl);
   };
 
   // Handle retry
@@ -118,68 +117,7 @@ function ReportContent() {
 
   return (
     <div className="space-y-6">
-      {/* Header with back button and URL display */}
-      <div className="flex items-center justify-between">
-        <BackButton onClick={handleBackToHome} />
-        
-        {/* Analysis controls */}
-        <div className="flex items-center gap-4">
-          {analysisState === 'idle' && (
-            <button
-              onClick={handleStartAnalysis}
-              className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors duration-200"
-            >
-              Start Analysis
-            </button>
-          )}
-          
-          {hasError && (
-            <button
-              onClick={handleRetry}
-              className="px-6 py-2 bg-gray-600 hover:bg-gray-500 text-white font-semibold rounded-lg transition-colors duration-200"
-            >
-              Retry Analysis
-            </button>
-          )}
-          
-          {isCompleted && (
-            <button
-              onClick={handleRetry}
-              className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-colors duration-200"
-            >
-              Run Again
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* URL Display avec métadonnées */}
-      <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
-        <div className="flex items-center gap-3 mb-3">
-          <h2 className="text-lg font-semibold text-gray-200">Analysis for:</h2>
-          <div className="flex items-center gap-2">
-            {isLoading && <LoadingSpinner size="sm" />}
-            <p className="text-blue-400 font-mono text-sm break-all">{decodedUrl}</p>
-          </div>
-        </div>
-        {/* Meta Title and Description */}
-        {collectionResults?.metadata?.basic && (
-          <div className="space-y-2 mb-3 pl-6 border-l-2 border-gray-600">
-            {collectionResults.metadata.basic.title && (
-              <div className="text-sm">
-                <span className="text-gray-400">Title:</span> 
-                <span className="text-gray-200 ml-2">{collectionResults.metadata.basic.title}</span>
-              </div>
-            )}
-            {collectionResults.metadata.basic.description && (
-              <div className="text-sm">
-                <span className="text-gray-400">Description:</span> 
-                <span className="text-gray-200 ml-2">{collectionResults.metadata.basic.description}</span>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+      {/* Bloc URL + métadonnées fusionné dans AEOScoreDisplay désormais. */}
 
       {/* Error handling for connection issues */}
       {hasError && isConnectionError && (
@@ -215,6 +153,10 @@ function ReportContent() {
         </div>
       )}
 
+      {analysisState === 'running' && (
+        <AnalysisProgress />
+      )}
+
       {/* Real-time analysis logs */}
       {/* <AnalysisLogs logs={logs} isRunning={isLoading} /> */}
 
@@ -224,6 +166,7 @@ function ReportContent() {
         analysisResults={analysisResults}
         isLoading={isLoading}
         isAnalysisCompleted={summary?.analysisCompleted || false}
+        onRunAgain={handleRetry}
       />
 
       {/* Analysis summary */}

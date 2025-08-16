@@ -22,13 +22,13 @@ const LAYOUT_STRUCTURAL_KNOWLEDGE_BASE = {
     problem: "The page is missing a <main> tag.",
     solution: "Wrap the primary, unique content of your page within a single <main> element.",
     explanation: "The <main> tag is the strongest signal to tell AIs which part of the page is the most important. Without it, the AI has to guess, which can lead to less accurate summaries and analysis.",
-    impact: 10
+    impact: 9
   },
   multipleMainTags: {
     problem: (count: number) => `Multiple <main> tags (total: ${count}) were found. A page must only have one.`,
     solution: "Ensure there is only one <main> tag on the page. Use <div> or <section> tags for other content blocks.",
     explanation: "Using more than one <main> tag creates a major ambiguity, as the AI no longer knows which content is truly the primary focus. This can lead to incorrect content extraction.",
-    impact: 10
+    impact: 9
   },
   incorrectMainNesting: {
     problem: (parentTag: string) => `The <main> tag is nested incorrectly inside another element like <${parentTag}>.`,

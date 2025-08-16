@@ -25,16 +25,19 @@ const SENTENCE_STRUCTURE_KB = {
   sentenceTooLong: {
     problem: "Your average sentence length is [avgLength] words, which is above the recommended maximum of 25.",
     solution: "Review sentences that exceed 25 words and split them into shorter, more concise statements.",
+    explanation: "Long sentences increase syntactic complexity, making it harder for AIs to accurately parse information and increasing the risk of misinterpretation.",
     impact: 7
   },
   sentenceTooShort: {
     problem: "Your average sentence length is [avgLength] words, which is below the recommended minimum of 15.",
     solution: "Combine related short sentences to create more fluid and context-rich statements.",
+    explanation: "While easy to parse, a series of very short sentences can appear fragmented to an AI and may lack the detailed context needed for deep understanding.",
     impact: 4
   },
   sentenceMonotonous: {
     problem: "Your sentence length is monotonous (standard deviation is only [stdDev]).",
     solution: "Vary your sentence structure by mixing shorter, impactful sentences with longer, more descriptive ones.",
+    explanation: "A lack of sentence variety can be a signal of lower-quality or auto-generated content; natural, human-written language uses a diverse rhythm.",
     impact: 3
   }
 } as const;
@@ -141,6 +144,7 @@ function createSentenceVarianceCard(text: string): MetricCard {
           avgLength: Math.round(averageLength * 10) / 10
         }),
         solution: SENTENCE_STRUCTURE_KB.sentenceTooLong.solution,
+        explanation: SENTENCE_STRUCTURE_KB.sentenceTooLong.explanation,
         impact: SENTENCE_STRUCTURE_KB.sentenceTooLong.impact
       });
       score -= 5; // Penalty for long sentences
@@ -153,6 +157,7 @@ function createSentenceVarianceCard(text: string): MetricCard {
           avgLength: Math.round(averageLength * 10) / 10
         }),
         solution: SENTENCE_STRUCTURE_KB.sentenceTooShort.solution,
+        explanation: SENTENCE_STRUCTURE_KB.sentenceTooShort.explanation,
         impact: SENTENCE_STRUCTURE_KB.sentenceTooShort.impact
       });
       score -= 3; // Penalty for short sentences
@@ -165,6 +170,7 @@ function createSentenceVarianceCard(text: string): MetricCard {
           stdDev: Math.round(standardDeviation * 10) / 10
         }),
         solution: SENTENCE_STRUCTURE_KB.sentenceMonotonous.solution,
+        explanation: SENTENCE_STRUCTURE_KB.sentenceMonotonous.explanation,
         impact: SENTENCE_STRUCTURE_KB.sentenceMonotonous.impact
       });
       score -= 2; // Penalty for monotonous structure

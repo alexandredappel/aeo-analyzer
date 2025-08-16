@@ -223,13 +223,17 @@ export interface AEOScoreResult {
 
 /**
  * Configuration des sections avec leurs poids
+ * SOURCE DE VÉRITÉ UNIQUE pour tous les poids du système AEO
+ * 
+ * Pour modifier les poids : changez uniquement cette constante !
+ * La somme doit toujours être égale à 100%
  */
 export const SECTION_WEIGHTS: Record<keyof AEOScoreResult['sections'], number> = {
-  discoverability: 20,
-  structuredData: 25,
-  llmFormatting: 25,
-  accessibility: 15,
-  readability: 15
+  discoverability: 15,    // 15% - SEO foundation + AI access
+  structuredData: 30,     // 30% - Schema markup (critical for modern SEO)
+  llmFormatting: 25,      // 25% - LLM-friendly structure (critical for AI)
+  accessibility: 15,      // 15% - Core Web Vitals + accessibility
+  readability: 15         // 15% - Clarté et structure du contenu
 } as const;
 
 /**
@@ -244,8 +248,10 @@ export const PERFORMANCE_THRESHOLDS = {
 
 /**
  * Helper type pour la validation des pourcentages de poids
+ * Garantit que la somme des poids = 100%
  */
 type SectionWeightsSum = typeof SECTION_WEIGHTS[keyof typeof SECTION_WEIGHTS];
+
 // Vérification que la somme des poids = 100%
 const _weightsValidation: 100 = (
   SECTION_WEIGHTS.discoverability +

@@ -5,7 +5,7 @@
  */
 
 // ===== CRAWLER & CONFIG =====
-export { fetchStaticHTML, fetchRobotsTxt, fetchSitemap, validateAndNormalizeUrl, extractBasicMetadata, TIMEOUT_MS, USER_AGENT, MAX_CONTENT_SIZE } from './crawler';
+export { fetchStaticHTML, fetchRobotsTxt, fetchSitemap, fetchLlmsTxt, validateAndNormalizeUrl, extractBasicMetadata, TIMEOUT_MS, USER_AGENT, MAX_CONTENT_SIZE } from './crawler';
 export type { CrawlResult } from './crawler';
 
 // ===== ANALYSIS SERVICES =====

@@ -56,32 +56,37 @@ function replaceDynamicPlaceholders(template: string, values: Record<string, any
  * Dynamic version with placeholders for data-rich recommendations
  */
 const CONTENT_ORGANIZATION_KNOWLEDGE_BASE = {
-  // Paragraph Structure Issues (20 points)
+  // Paragraph Structure Issues
   paragraphsTooLong: {
     problem: "[count] paragraphs ([percent]%) are too long (over 150 words).",
     solution: "Review these long paragraphs and split them into smaller, more focused ones.",
+    explanation: "Breaking down 'walls of text' helps AIs isolate individual ideas and better understand the thematic structure of your content.",
     impact: 8
   },
   paragraphsTooShort: {
     problem: "[count] paragraphs ([percent]%) are too short (under 50 words).",
     solution: "Consolidate or expand these short paragraphs to provide more context.",
+    explanation: "Very short paragraphs can appear fragmented to AIs and may lack the necessary context to be seen as substantial information.",
     impact: 5
   },
   inconsistentParagraphLength: {
     problem: "Paragraph length is inconsistent, which can disrupt reading flow.",
     solution: "Revise your content to ensure paragraphs have more consistent lengths.",
+    explanation: "An erratic structure makes it difficult for AIs to identify consistent patterns of argumentation and information hierarchy within your content.",
     impact: 4
   },
   
-  // Content Density Issues (15 points)
+  // Content Density Issues
   lowTextToHTMLRatio: {
     problem: "The text-to-HTML ratio is low at [ratio]%. The target is above 15%.",
     solution: "Increase the amount of descriptive text or simplify the HTML structure.",
+    explanation: "A low ratio can be a strong signal of 'thin content,' suggesting to AIs that the page has low informational value compared to its code overhead.",
     impact: 7
   },
   insufficientWordCount: {
     problem: "The page contains only [wordCount] words of text. The target is over 300.",
-    solution: "Expand the content to provide at least 300 words of valuable text for your users.",
+    solution: "Expand the content to provide at least 300 words of valuable text.",
+    explanation: "Pages with a low word count risk being considered 'thin content' by AIs and may be seen as less authoritative sources of information.",
     impact: 9
   }
 };
@@ -223,6 +228,7 @@ function analyzeParagraphStructure($: cheerio.CheerioAPI): MetricCard {
       recommendations.push({
         problem: problemText,
         solution: CONTENT_ORGANIZATION_KNOWLEDGE_BASE.paragraphsTooLong.solution,
+        explanation: CONTENT_ORGANIZATION_KNOWLEDGE_BASE.paragraphsTooLong.explanation,
         impact: CONTENT_ORGANIZATION_KNOWLEDGE_BASE.paragraphsTooLong.impact
       });
     }
@@ -237,6 +243,7 @@ function analyzeParagraphStructure($: cheerio.CheerioAPI): MetricCard {
       recommendations.push({
         problem: problemText,
         solution: CONTENT_ORGANIZATION_KNOWLEDGE_BASE.paragraphsTooShort.solution,
+        explanation: CONTENT_ORGANIZATION_KNOWLEDGE_BASE.paragraphsTooShort.explanation,
         impact: CONTENT_ORGANIZATION_KNOWLEDGE_BASE.paragraphsTooShort.impact
       });
     }
@@ -245,6 +252,7 @@ function analyzeParagraphStructure($: cheerio.CheerioAPI): MetricCard {
       recommendations.push({
         problem: CONTENT_ORGANIZATION_KNOWLEDGE_BASE.inconsistentParagraphLength.problem,
         solution: CONTENT_ORGANIZATION_KNOWLEDGE_BASE.inconsistentParagraphLength.solution,
+        explanation: CONTENT_ORGANIZATION_KNOWLEDGE_BASE.inconsistentParagraphLength.explanation,
         impact: CONTENT_ORGANIZATION_KNOWLEDGE_BASE.inconsistentParagraphLength.impact
       });
     }
@@ -315,6 +323,7 @@ function analyzeContentDensity($: cheerio.CheerioAPI): MetricCard {
       recommendations.push({
         problem: problemText,
         solution: CONTENT_ORGANIZATION_KNOWLEDGE_BASE.lowTextToHTMLRatio.solution,
+        explanation: CONTENT_ORGANIZATION_KNOWLEDGE_BASE.lowTextToHTMLRatio.explanation,
         impact: CONTENT_ORGANIZATION_KNOWLEDGE_BASE.lowTextToHTMLRatio.impact
       });
     }
@@ -328,6 +337,7 @@ function analyzeContentDensity($: cheerio.CheerioAPI): MetricCard {
       recommendations.push({
         problem: problemText,
         solution: CONTENT_ORGANIZATION_KNOWLEDGE_BASE.insufficientWordCount.solution,
+        explanation: CONTENT_ORGANIZATION_KNOWLEDGE_BASE.insufficientWordCount.explanation,
         impact: CONTENT_ORGANIZATION_KNOWLEDGE_BASE.insufficientWordCount.impact
       });
     }

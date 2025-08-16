@@ -22,7 +22,7 @@ import {
 // Import individual analyzers
 import { analyzeTechnicalFoundation } from './technical-foundation-analysis';
 import { analyzeAiAccess } from './ai-access-analysis';
-import { analyzeLlmTxt } from './llm-txt-analysis';
+import { analyzeLlmsTxt } from './llms-txt-analysis';
 
 /**
  * Complete discoverability analysis according to new architecture
@@ -40,7 +40,7 @@ export function analyzeDiscoverability(collectedData: CollectedData): Discoverab
     // Individual metric analyses
     const foundationResult = analyzeTechnicalFoundation(collectedData);
     const aiAccessResult = analyzeAiAccess(collectedData);
-    const llmTxtCard = analyzeLlmTxt(collectedData.llmTxt);
+    const llmsTxtCard = analyzeLlmsTxt(collectedData.llmsTxt);
     const globalPenalty = aiAccessResult.globalPenalty; // Extract the penalty
 
     // Build drawers (DrawerSubSection)
@@ -68,10 +68,10 @@ export function analyzeDiscoverability(collectedData: CollectedData): Discoverab
       id: 'llm-instructions',
       name: 'LLM Instructions',
       description: 'Checks for the presence of an llm.txt file for advanced AI directives.',
-      totalScore: llmTxtCard.score,
-      maxScore: llmTxtCard.maxScore,
-      status: getPerformanceStatus(llmTxtCard.score, llmTxtCard.maxScore),
-      cards: [llmTxtCard],
+      totalScore: llmsTxtCard.score,
+      maxScore: llmsTxtCard.maxScore,
+      status: llmsTxtCard.rawData?.llmTxtFound ? 'excellent' : 'error',
+      cards: [llmsTxtCard],
     };
 
     // Total section score (LLM Instructions not included as it's informational - 0 points)
@@ -98,8 +98,8 @@ export function analyzeDiscoverability(collectedData: CollectedData): Discoverab
       sitemapPresent: collectedData.sitemap?.success || false,
       blockedAIBots: aiAccessResult.cards[0]?.rawData?.blockedBots || [],
       allowedAIBots: aiAccessResult.cards[0]?.rawData?.allowedBots || [],
-      llmTxtFound: collectedData.llmTxt?.success || false,
-      llmTxtContent: collectedData.llmTxt?.data || null
+      llmTxtFound: collectedData.llmsTxt?.success || false,
+      llmTxtContent: collectedData.llmsTxt?.data || null
     };
 
     return {
@@ -145,7 +145,7 @@ export function analyzeDiscoverability(collectedData: CollectedData): Discoverab
 // Individual analyzers for testing/debugging
 export { analyzeTechnicalFoundation } from './technical-foundation-analysis';
 export { analyzeAiAccess } from './ai-access-analysis';
-export { analyzeLlmTxt } from './llm-txt-analysis';
+export { analyzeLlmsTxt } from './llms-txt-analysis';
 
 // Shared utilities and constants
 export * from './shared/constants';
