@@ -215,14 +215,8 @@ export { SECTION_CONFIG } from './shared/constants';
 
 // Re-export individual analyzers for backwards compatibility
 export {
-  // JSON-LD analyzers
-  analyzeIdentityAndStructure,
-  analyzeMainEntity,
-  analyzeEnrichmentSchemas,
-  analyzeGraphConnectivity,
-  parseJSONLD,
-  analyzeJSONLDPresence,
-  analyzeSchemaTypesCompleteness
+  // JSON-LD analyzer (main function only)
+  analyzeJsonLD
 } from './json-ld-analysis';
 
 export {
