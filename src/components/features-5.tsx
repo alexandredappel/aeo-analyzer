@@ -8,14 +8,12 @@ export default function FeaturesSection() {
                 <div className="grid items-center gap-12 md:grid-cols-2 md:gap-12 lg:grid-cols-2 lg:gap-24">
                     <div>
                         <div className="md:pr-6 lg:pr-0">
-                            <h2 className="text-4xl font-semibold lg:text-5xl">Why ranking on Google isn’t enough anymore</h2>
+                            <h2 className="text-4xl font-semibold lg:text-5xl">Ranking on Google isn't enough anymore</h2>
                             <p className="mt-6">
-                                Ranking on Google is no longer enough.
+                                Conversational AIs now deliver full, instant answers, cutting clicks to websites and bypassing even high-ranking pages.
                                 <br />
                                 <br />
                                 Without AI optimization, you face:
-                                <br />
-                                Conversational AIs now deliver full, instant answers — cutting clicks to websites and bypassing even high-ranking pages.
                             </p>
                         </div>
                         <ul className="mt-8 divide-y border-y *:flex *:items-center *:gap-3 *:py-3">

@@ -8,7 +8,7 @@ export default function ContentSection() {
                     <h2 className="text-4xl font-semibold lg:text-5xl">Search behavior has already changed</h2>
                     <div className="space-y-6">
                         <p>
-                            Ask yourself: when you need quick answers, do you go to Google first — or do you ask ChatGPT?
+                            Ask yourself: when you need quick answers, do you go to Google first or do you ask ChatGPT, Perplexity or Gemini?
                         </p>
                         <div className="space-y-4">
                             <p>Your customers, or your clients’ customers, now:</p>
