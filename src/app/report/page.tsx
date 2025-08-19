@@ -7,6 +7,8 @@ import { ErrorMessage, BackButton, AnalysisLogs, CollectionResults, LoadingSpinn
 import { useAnalysis } from "@/hooks/useAnalysis";
 import { HeroHeader } from "@/components/header";
 import { normalizeAndValidate } from "@/utils/url";
+import { AUTH_FLAG_PARAM } from "@/lib/constants";
+import { stripAuthFlag } from "@/utils/urlGuards";
 
 // URL validation function (kept for compatibility if needed elsewhere)
 function isValidUrl(urlString: string): boolean {
@@ -18,6 +20,7 @@ function ReportContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const urlParam = searchParams.get('url');
+  const authFlag = searchParams.get(AUTH_FLAG_PARAM) === '1';
   const hasAutoStarted = useRef(false);
   
   const {
@@ -38,9 +41,9 @@ function ReportContent() {
     router.push('/');
   };
 
-  // Auto-start analysis when arriving with a valid URL
+  // Auto-start analysis when arriving with a valid URL, unless returning from auth (?auth=1)
   useEffect(() => {
-    if (urlParam && !hasAutoStarted.current && analysisState === 'idle') {
+    if (urlParam && !authFlag && !hasAutoStarted.current && analysisState === 'idle') {
       try {
         const decodedUrl = decodeURIComponent(urlParam);
         const normalized = normalizeAndValidate(decodedUrl);
@@ -52,7 +55,15 @@ function ReportContent() {
         // Invalid URL encoding - will be handled by validation below
       }
     }
-  }, [urlParam, analysisState, startAnalysis]);
+  }, [urlParam, authFlag, analysisState, startAnalysis]);
+
+  // Optional: clean up ?auth=1 from the URL for nicer UX
+  useEffect(() => {
+    if (authFlag && typeof window !== 'undefined') {
+      const cleaned = stripAuthFlag(window.location.pathname + window.location.search);
+      router.replace(cleaned);
+    }
+  }, [authFlag, router]);
 
   // Handle missing URL parameter
   if (!urlParam) {

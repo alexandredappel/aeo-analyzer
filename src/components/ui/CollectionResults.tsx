@@ -1,4 +1,7 @@
 import { useState } from 'react';
+import { supabase } from '@/lib/supabaseClient';
+import { UMAMI_EVENTS } from '@/lib/constants';
+import { SignInModal } from '@/components/auth/SignInModal';
 import { MainSectionAnalysis } from '@/components/ui/analysis/MainSectionAnalysis';
 import { MainSection } from '@/types/analysis-architecture';
 import { AEOScoreDisplay } from '@/components/ui/AEOScoreDisplay';
@@ -280,8 +283,10 @@ export function CollectionResults({ data, analysisResults, isLoading, isAnalysis
   // State management for hierarchical drawer expansion
   const [expandedDrawers, setExpandedDrawers] = useState<Set<string>>(new Set());
   const [isExporting, setIsExporting] = useState(false);
+  const [isSignInOpen, setIsSignInOpen] = useState(false);
 
-  const handleExport = async () => {
+  // Perform the actual export (requires authenticated user)
+  const doExport = async () => {
     try {
       if (!data || !analysisResults) return;
       setIsExporting(true);
@@ -324,6 +329,24 @@ export function CollectionResults({ data, analysisResults, isLoading, isAnalysis
       console.error(err);
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  // Handle Export button click: check session and route accordingly
+  const handleExport = async () => {
+    try {
+      const { data: sessionData, error } = await supabase.auth.getSession();
+      if (error) {
+        console.error('[Auth] Error getting session:', error);
+      }
+      if (sessionData?.session) {
+        await doExport();
+      } else {
+        (window as any).umami?.track(UMAMI_EVENTS.export_attempt);
+        setIsSignInOpen(true); // Will open SignInModal in the next prompt
+      }
+    } catch (e) {
+      console.error('[Auth] Unexpected error during export click:', e);
     }
   };
 
@@ -396,6 +419,7 @@ export function CollectionResults({ data, analysisResults, isLoading, isAnalysis
       )}
 
       {/* Loading UI removed: handled by parent page */}
+      <SignInModal isOpen={isSignInOpen} onClose={() => setIsSignInOpen(false)} />
     </div>
   );
 } 
