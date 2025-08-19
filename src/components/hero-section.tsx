@@ -1,35 +1,14 @@
 import React, { useState } from 'react'
-import { SendHorizontal } from 'lucide-react'
 import { LiaLinkSolid, LiaCheckCircleSolid } from 'react-icons/lia'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { TextEffect } from '@/components/ui/text-effect'
-import { AnimatedGroup } from '@/components/ui/animated-group'
 import { HeroHeader } from './header'
 import { LogoCloud } from './logo-cloud'
 import { useRouter } from 'next/navigation'
 import { trackAnalysisStart } from '@/utils/analytics'
 import { normalizeAndValidate } from '@/utils/url'
 
-const transitionVariants = {
-    item: {
-        hidden: {
-            opacity: 0,
-            filter: 'blur(12px)',
-            y: 12,
-        },
-        visible: {
-            opacity: 1,
-            filter: 'blur(0px)',
-            y: 0,
-            transition: {
-                type: 'spring' as const,
-                bounce: 0.3,
-                duration: 1.5,
-            },
-        },
-    },
-}
+// animations retirées: TextEffect et AnimatedGroup
 
 export default function HeroSection() {
     const router = useRouter()
@@ -60,36 +39,14 @@ export default function HeroSection() {
                                 <LiaCheckCircleSolid />
                                 <span>Spot & Fix AI Issues in 1 Click</span>
                             </Badge>
-                            <TextEffect
-                                preset="fade-in-blur"
-                                speedSegment={0.3}
-                                as="h1"
-                                className="text-balance text-4xl font-semibold md:text-5xl">
+                            <h1 className="text-balance text-4xl font-semibold md:text-5xl">
                                 Make your site the source AI engines cite first
-                            </TextEffect>
-                            <TextEffect
-                                per="line"
-                                preset="fade-in-blur"
-                                speedSegment={0.3}
-                                delay={0.5}
-                                as="p"
-                                className="mx-auto mt-6 max-w-2xl text-pretty text-lg">
+                            </h1>
+                            <p className="mx-auto mt-6 max-w-2xl text-pretty text-lg">
                                 Run a one-click audit that makes your content visible and understandable by LLMs like ChatGPT. Get a crystal-clear report with precise actions to boost your AI visibility.
-                            </TextEffect>
+                            </p>
 
-                            <AnimatedGroup
-                                variants={{
-                                    container: {
-                                        visible: {
-                                            transition: {
-                                                staggerChildren: 0.05,
-                                                delayChildren: 0.75,
-                                            },
-                                        },
-                                    },
-                                    ...transitionVariants,
-                                }}
-                                className="mt-12">
+                            <div className="mt-12">
                                 <form onSubmit={handleSubmit} className="mx-auto max-w-2xl md:max-w-3xl">
                                     <div className="bg-background has-[input:focus]:ring-muted relative grid grid-cols-[1fr_auto] items-center rounded-[calc(var(--radius)+0.75rem)] border px-3 py-2 gap-2 shadow shadow-zinc-950/5 has-[input:focus]:ring-2">
                                         <LiaLinkSolid className="pointer-events-none absolute inset-y-0 left-5 my-auto size-6 md:size-7" />
@@ -137,7 +94,7 @@ export default function HeroSection() {
                                     </div>
                                     <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] mix-blend-overlay [background-size:16px_16px] [mask-image:radial-gradient(ellipse_50%_50%_at_50%_50%,#000_70%,transparent_100%)] dark:opacity-5"></div>
                                 </div>
-                            </AnimatedGroup>
+                            </div>
                         </div>
                     </div>
                 </section>

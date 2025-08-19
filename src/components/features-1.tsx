@@ -9,12 +9,13 @@ export default function Features() {
                 <div className="text-left md:text-center">
                     <h2 className="text-balance text-4xl font-semibold lg:text-5xl">Turn your website into an AI-cited source</h2>
                     <p className="mt-4 max-w-3xl mx-auto">
-                        Forget theory, here’s how you make AI engines see you.
+                        Forget theory, here's how you make AI engines see you.
+                        <br />
                         <br />
                         Run a full AI visibility audit of your site, checking how well LLMs like ChatGPT, Claude, and Gemini can find, understand, and quote your content.
                         <br />
                         <br />
-                        You’ll see exactly what’s blocking you and get clear, prioritized actions to fix it.
+                        You'll see exactly what's blocking you and get clear, prioritized actions to fix it.
                     </p>
                 </div>
                 <div className="@min-4xl:max-w-full @min-4xl:grid-cols-3 mx-auto mt-8 grid max-w-sm gap-6 md:mt-16 md:grid-cols-3">

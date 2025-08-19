@@ -325,8 +325,10 @@ export function CollectionResults({ data, analysisResults, isLoading, isAnalysis
       a.click();
       a.remove();
       window.URL.revokeObjectURL(urlObject);
+      try { (window as any).umami?.track(UMAMI_EVENTS.export_success, { url: data.url }); } catch {}
     } catch (err) {
       console.error(err);
+      try { (window as any).umami?.track(UMAMI_EVENTS.export_failed, { url: data?.url, error: err instanceof Error ? err.message : String(err) }); } catch {}
     } finally {
       setIsExporting(false);
     }
