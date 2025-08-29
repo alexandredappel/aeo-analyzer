@@ -48,8 +48,7 @@ export const UrlForm = forwardRef<UrlFormRef, UrlFormProps>(
         // Track the analysis start event
         trackAnalysisStart(normalized);
         onSubmit(normalized);
-      } catch (error) {
-        console.error("Error submitting form:", error);
+      } catch (_error) {
         setIsSubmitting(false);
       }
     };

@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { supabase } from '@/lib/supabaseClient';
+import { createClient } from '@/lib/supabase/client';
 import { RETURN_TO_PARAM, UMAMI_EVENTS } from '@/lib/constants';
 import { sanitizeReturnTo } from '@/utils/urlGuards';
 
@@ -15,6 +15,7 @@ export default function CallbackRunner() {
 
     const run = async () => {
       try {
+        const supabase = createClient();
         const code = searchParams.get('code');
         if (code) {
           try { await supabase.auth.exchangeCodeForSession(code); } catch {}

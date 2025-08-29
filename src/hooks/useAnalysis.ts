@@ -114,6 +114,7 @@ export function useAnalysis() {
   const [error, setError] = useState<string | null>(null);
   const [summary, setSummary] = useState<AnalysisResponse['summary'] | null>(null);
   const [analysisResults, setAnalysisResults] = useState<AnalysisResults | null>(null);
+  const [isCreditLimitOpen, setIsCreditLimitOpen] = useState<boolean>(false);
 
   const startAnalysis = useCallback(async (url: string) => {
     // Reset state
@@ -139,6 +140,13 @@ export function useAnalysis() {
       });
 
       if (!response.ok) {
+        // Handle credit limit (402 Payment Required)
+        if (response.status === 402) {
+          setAnalysisState('idle');
+          setIsCreditLimitOpen(true);
+          setError('Payment Required (402): Credit limit reached');
+          return; // Stop further processing
+        }
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
@@ -191,6 +199,8 @@ export function useAnalysis() {
     analysisResults,
     startAnalysis,
     resetAnalysis,
+    isCreditLimitOpen,
+    setIsCreditLimitOpen,
     isLoading: analysisState === 'running',
     isCompleted: analysisState === 'completed',
     hasError: analysisState === 'error',
