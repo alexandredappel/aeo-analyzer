@@ -16,5 +16,6 @@ export { AnalysisProgress } from './AnalysisProgress';
 // Composants d'analyse hiérarchique
 export * from './analysis';
 
-// Composants d'analyse hiérarchique
-export * from './analysis'; 
+// Dialog components
+export { BaseDialog } from './BaseDialog';
+export { CreditLimitDialog } from './CreditLimitDialog';

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { supabase } from '@/lib/supabaseClient';
+import { createClient } from '@/lib/supabase/client';
 import { AUTH_CALLBACK_PATH, RETURN_TO_PARAM, AUTH_FLAG_PARAM, UMAMI_EVENTS } from '@/lib/constants';
 
 interface SignInModalProps {
@@ -19,6 +19,7 @@ export function SignInModal({ isOpen, onClose }: SignInModalProps) {
   const [status, setStatus] = useState<Status>('idle');
   const [error, setError] = useState<string | null>(null);
   const titleId = useMemo(() => 'sign-in-title', []);
+  const supabase = createClient();
 
   // Focus email input on open
   useEffect(() => {

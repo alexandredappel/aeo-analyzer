@@ -55,6 +55,9 @@ import { AccessibilityTransformer } from '@/transformers/accessibility-transform
 import { ReadabilityTransformer } from '@/transformers/readability-transformer';
 
 import { MainSection } from '@/types/analysis-architecture';
+import { createClient } from '@/lib/supabase/server';
+import { cookies } from 'next/headers';
+import { v4 as uuidv4 } from 'uuid';
 
 /**
  * Custom logger that captures logs for response
@@ -177,6 +180,85 @@ interface ErrorResponse {
 export async function POST(request: Request): Promise<Response> {
   const responseLogger = new ResponseLogger();
   const startTime = Date.now();
+  
+  // Access control & credit decrement (runs before any heavy work)
+  let isNewGuest = false;
+  let newGuestFingerprint: string | null = null;
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (user) {
+      // 1) Check for active subscription
+      // No subscription = free user, subscription exists = paying user
+      
+      const { data: subscription, error: subError } = await supabase
+        .from('subscriptions')
+        .select('status, plan_type')
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .single();
+
+      
+      // NEW LOGIC: No subscription = free user
+      const isPayingUser = !subError && !!subscription;
+      const planType = (subscription as any)?.plan_type || 'free';
+
+      
+      // 2) Use unified RPC function
+      const { data: rpcData, error: rpcError } = await supabase.rpc(
+        'decrement_user_analysis_count',
+        { p_user_id: user.id }
+      );
+      
+      const rpcPayload = Array.isArray(rpcData) ? rpcData[0] : rpcData;
+      
+      if (rpcError || !rpcPayload || rpcPayload.success === false) {
+        const limitType = isPayingUser ? '100 analyses/mois' : '5 analyses/mois';
+        responseLogger.warn(`User ${user.id} has no credits left. Plan: ${planType} (${limitType})`);
+        return Response.json({ 
+          message: rpcPayload?.message || 'Monthly credit limit reached.',
+          debug: {
+            planType,
+            isPayingUser,
+            limitType,
+            rpcError: rpcError?.message,
+            rpcPayload
+          }
+        }, { status: 402 });
+      }
+      
+      // 3) Success log with clear details
+      const limitType = isPayingUser ? '100' : '5';
+      
+    } else {
+      const cookieStore = await cookies();
+      const existingFingerprint = cookieStore.get('guest_fingerprint')?.value || null;
+      let fingerprint = existingFingerprint;
+      if (!fingerprint) {
+        fingerprint = uuidv4();
+        isNewGuest = true;
+        newGuestFingerprint = fingerprint;
+      }
+
+      
+      const { data: rpcData, error: rpcError } = await supabase.rpc('decrement_guest_analysis_count', { p_guest_fingerprint: fingerprint });
+      
+      const rpcPayload = Array.isArray(rpcData) ? rpcData[0] : rpcData;
+      if (rpcError || !rpcPayload || rpcPayload.success === false) {
+        responseLogger.warn(`Guest ${fingerprint} has no credits left or an RPC error occurred.`);
+        return Response.json({ message: rpcPayload?.message || 'Limite de crédits atteinte ou erreur serveur.' }, { status: 402 });
+      }
+    }
+  } catch (accessError) {
+    responseLogger.error(`Access control failed: ${(accessError as Error).message}`);
+    return Response.json({
+      error: 'Access Control Error',
+      message: 'Failed to perform access control checks',
+      statusCode: 500,
+      timestamp: new Date().toISOString()
+    }, { status: 500 });
+  }
   
   // Initialize performance timer for comprehensive measurement
   const { PerformanceTimer, MemoryOptimizer } = await import('@/services/performance-config');
@@ -591,6 +673,16 @@ export async function POST(request: Request): Promise<Response> {
     // Log final request
     logger.info(`POST /api/collect-data - 200 - ${finalTotalTime}ms`);
     
+    // Attach new guest fingerprint cookie if created during access control
+    if (isNewGuest && newGuestFingerprint) {
+      const cookieStore = await cookies();
+      cookieStore.set('guest_fingerprint', newGuestFingerprint, {
+        httpOnly: true,
+        path: '/',
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 60 * 60 * 24 * 365
+      });
+    }
     return Response.json(response);
     
   } catch (error) {
@@ -665,4 +757,8 @@ export async function GET(request: Request): Promise<Response> {
     
     return Response.json(response);
   }
-} 
+} [
+  {
+    "tableowner": "postgres"
+  }
+]

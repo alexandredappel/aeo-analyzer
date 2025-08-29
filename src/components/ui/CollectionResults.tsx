@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { supabase } from '@/lib/supabaseClient';
+import { createClient } from '@/lib/supabase/client';
 import { UMAMI_EVENTS } from '@/lib/constants';
-import { SignInModal } from '@/components/auth/SignInModal';
+import { useRouter } from 'next/navigation';
 import { MainSectionAnalysis } from '@/components/ui/analysis/MainSectionAnalysis';
 import { MainSection } from '@/types/analysis-architecture';
 import { AEOScoreDisplay } from '@/components/ui/AEOScoreDisplay';
@@ -283,7 +283,8 @@ export function CollectionResults({ data, analysisResults, isLoading, isAnalysis
   // State management for hierarchical drawer expansion
   const [expandedDrawers, setExpandedDrawers] = useState<Set<string>>(new Set());
   const [isExporting, setIsExporting] = useState(false);
-  const [isSignInOpen, setIsSignInOpen] = useState(false);
+  const router = useRouter();
+  const supabase = createClient();
 
   // Perform the actual export (requires authenticated user)
   const doExport = async () => {
@@ -327,7 +328,6 @@ export function CollectionResults({ data, analysisResults, isLoading, isAnalysis
       window.URL.revokeObjectURL(urlObject);
       try { (window as any).umami?.track(UMAMI_EVENTS.export_success, { url: data.url }); } catch {}
     } catch (err) {
-      console.error(err);
       try { (window as any).umami?.track(UMAMI_EVENTS.export_failed, { url: data?.url, error: err instanceof Error ? err.message : String(err) }); } catch {}
     } finally {
       setIsExporting(false);
@@ -339,16 +339,16 @@ export function CollectionResults({ data, analysisResults, isLoading, isAnalysis
     try {
       const { data: sessionData, error } = await supabase.auth.getSession();
       if (error) {
-        console.error('[Auth] Error getting session:', error);
+        // noop: session readiness error
       }
       if (sessionData?.session) {
         await doExport();
       } else {
         (window as any).umami?.track(UMAMI_EVENTS.export_attempt);
-        setIsSignInOpen(true); // Will open SignInModal in the next prompt
+        router.push('/auth/sign-up');
       }
-    } catch (e) {
-      console.error('[Auth] Unexpected error during export click:', e);
+    } catch (_e) {
+      // noop
     }
   };
 
@@ -421,7 +421,6 @@ export function CollectionResults({ data, analysisResults, isLoading, isAnalysis
       )}
 
       {/* Loading UI removed: handled by parent page */}
-      <SignInModal isOpen={isSignInOpen} onClose={() => setIsSignInOpen(false)} />
     </div>
   );
 } 

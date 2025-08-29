@@ -58,6 +58,7 @@ DESIGN.md
 !README.md
 
 # Fichiers et dossiers exclus de la production
+AGENTS.md
 CLAUDE.md
 IMPACT_BADGES_IMPLEMENTATION.md
 .windsurfrules

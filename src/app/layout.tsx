@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
+import { HeroHeader } from "@/components/header";
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+// HeaderWithUserNav removed; use page-level headers or server-rendered user nav when reintroduced
 
 const dmSans = localFont({
   variable: "--font-dm-sans",
@@ -45,6 +49,7 @@ export default function RootLayout({
         )}
       </head>
       <body className={`${dmSans.variable} antialiased`}>
+        <HeroHeader />
         {children}
       </body>
     </html>

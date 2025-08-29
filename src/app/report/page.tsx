@@ -3,7 +3,7 @@
 import { useSearchParams, useRouter } from "next/navigation";
 import { Suspense, useEffect, useRef } from "react";
 import { ReportLayout } from "@/components/layouts/ReportLayout";
-import { ErrorMessage, BackButton, AnalysisLogs, CollectionResults, LoadingSpinner, AnalysisProgress } from "@/components/ui";
+import { ErrorMessage, BackButton, AnalysisLogs, CollectionResults, LoadingSpinner, AnalysisProgress, CreditLimitDialog } from "@/components/ui";
 import { useAnalysis } from "@/hooks/useAnalysis";
 import { HeroHeader } from "@/components/header";
 import { normalizeAndValidate } from "@/utils/url";
@@ -32,6 +32,8 @@ function ReportContent() {
     analysisResults,
     startAnalysis,
     resetAnalysis,
+    isCreditLimitOpen,
+    setIsCreditLimitOpen,
     isLoading,
     isCompleted,
     hasError,
@@ -128,6 +130,11 @@ function ReportContent() {
 
   return (
     <div className="space-y-6">
+      <CreditLimitDialog
+        isOpen={isCreditLimitOpen}
+        onOpenChange={setIsCreditLimitOpen}
+        onMaybeLater={() => router.push('/')}
+      />
       {/* Bloc URL + métadonnées fusionné dans AEOScoreDisplay désormais. */}
 
       {/* Error handling for connection issues */}
@@ -147,22 +154,7 @@ function ReportContent() {
       )}
 
       {/* Analysis progress or placeholder */}
-      {analysisState === 'idle' && (
-        <div className="bg-yellow-900/20 border border-yellow-700 rounded-lg p-8 text-center">
-          <div className="space-y-4">
-            <div className="w-16 h-16 mx-auto bg-yellow-500/20 rounded-full flex items-center justify-center">
-              <LoadingSpinner size="md" />
-            </div>
-            <h3 className="text-xl font-semibold text-yellow-400">
-              Preparing analysis...
-            </h3>
-            <p className="text-gray-300 max-w-md mx-auto">
-              Analysis will start automatically. We&apos;re preparing to collect data about your website&apos;s 
-              AEO optimization including HTML content, robots.txt, and sitemap.xml.
-            </p>
-          </div>
-        </div>
-      )}
+      
 
       {analysisState === 'running' && (
         <AnalysisProgress />

@@ -1,4 +1,5 @@
 import type { NextRequest } from 'next/server';
+import logger from '@/utils/logger';
 import chromium from '@sparticuz/chromium';
 import puppeteer from 'puppeteer-core';
 import fs from 'node:fs';
@@ -283,7 +284,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       }
     });
   } catch (error) {
-    console.error('Export PDF error:', error);
+    logger.error('Export PDF error', error as Error);
     return Response.json({ error: (error as Error).message }, { status: 500 });
   }
 }

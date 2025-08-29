@@ -2,11 +2,12 @@ import React, { useState } from 'react'
 import { LiaLinkSolid, LiaCheckCircleSolid } from 'react-icons/lia'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { HeroHeader } from './header'
+// Header is now rendered globally via layout
 import { LogoCloud } from './logo-cloud'
 import { useRouter } from 'next/navigation'
 import { trackAnalysisStart } from '@/utils/analytics'
 import { normalizeAndValidate } from '@/utils/url'
+import { useUserQuota } from '@/hooks/useUserQuota'
 
 // animations retirées: TextEffect et AnimatedGroup
 
@@ -14,6 +15,7 @@ export default function HeroSection() {
     const router = useRouter()
     const [url, setUrl] = useState('')
     const [error, setError] = useState<string | null>(null)
+    const { remaining, isLoading } = useUserQuota()
 
     const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault()
@@ -29,8 +31,6 @@ export default function HeroSection() {
     }
     return (
         <>
-            <HeroHeader />
-
             <main className="overflow-hidden [--color-primary-foreground:var(--color-white)] [--color-primary:var(--color-green-600)]">
                 <section id="hero" className="scroll-mt-24 md:scroll-mt-28">
                     <div className="relative mx-auto max-w-6xl px-6 pb-0 pt-32 lg:pt-48">
@@ -71,6 +71,11 @@ export default function HeroSection() {
                                     </div>
                                     {error && (
                                         <p className="text-red-600 text-sm mt-2 text-left">{error}</p>
+                                    )}
+                                    {!isLoading && (
+                                        <p className="text-sm mt-2 text-center text-foreground/80">
+                                            {remaining} {remaining === 1 ? 'analysis' : 'analyses'} remaining
+                                        </p>
                                     )}
                                 </form>
 
