@@ -65,4 +65,5 @@ IMPACT_BADGES_IMPLEMENTATION.md
 # Dossiers complets exclus
 DOCUMENTATION/
 .cursor/
-.superdesign/
+.superdesign/DOCUMENTATION/
+AGENTS.md
